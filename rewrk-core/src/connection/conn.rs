@@ -184,7 +184,7 @@ impl ReWrkConnection {
 }
 
 /// Performs the HTTP handshake
-async fn handshake<S>(
+pub(crate) async fn handshake<S>(
     conn_builder: conn::Builder,
     stream: S,
 ) -> Result<HttpStream, hyper::Error>
@@ -200,7 +200,7 @@ where
 }
 
 /// The established HTTP stream.
-pub struct HttpStream {
+pub(crate) struct HttpStream {
     /// The live connection to send requests.
     conn: SendRequest<Body>,
     /// The hyper connection task handle.

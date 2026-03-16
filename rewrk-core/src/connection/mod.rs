@@ -1,9 +1,11 @@
 use tokio_native_tls::TlsConnector;
 
 mod conn;
+mod http1;
 mod protocol;
 
 pub use self::conn::{ReWrkConnection, ReWrkConnector};
+pub use self::http1::{Http1Connection, Http1Connector};
 pub use self::protocol::{ProtocolConnection, ProtocolConnector};
 
 /// The type of bench that is being ran.
