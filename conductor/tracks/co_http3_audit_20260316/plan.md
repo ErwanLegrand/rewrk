@@ -38,7 +38,7 @@
     - [x] Write an integration test with an axum server that introduces artificial latency spikes
     - [x] Assert that CO-corrected p99 is significantly higher than uncorrected p99
     - [x] Verify the test demonstrates the CO effect clearly
-- [ ] Task: Conductor - User Manual Verification 'Coordinated Omission Mitigation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Coordinated Omission Mitigation' (Protocol in workflow.md)
 
 ## Phase 3: Protocol-Agnostic Connection Layer
 
