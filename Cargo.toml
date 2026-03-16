@@ -9,6 +9,7 @@ anyhow = "1"
 clap = "2"
 colored = "2"
 futures-util = "0.3"
+hdrhistogram = "7"
 http = "0.2"
 hyper = { version = "0.14", features = ["runtime", "client", "http1", "http2"] }
 native-tls = { version = "0.2", features = ["alpn"] }

@@ -83,6 +83,7 @@ fn main() {
 
     let pct: bool = args.is_present("pct");
     let insecure: bool = args.is_present("insecure");
+    let co_correction: bool = !args.is_present("no_co_correction");
 
     let rounds: usize = match args.value_of("rounds").unwrap_or("1").trim().parse::<usize>() {
         Ok(0) => {
@@ -136,6 +137,7 @@ fn main() {
         headers,
         body,
         insecure,
+        co_correction,
     };
 
     bench::start_benchmark(settings);
@@ -296,6 +298,17 @@ fn parse_args() -> ArgMatches<'static> {
                 .help(
                     "Disable TLS certificate and hostname verification (for self-signed certs). \
                      WARNING: this bypasses all TLS security checks."
+                )
+                .takes_value(false)
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("no_co_correction")
+                .long("no-co-correction")
+                .help(
+                    "Disable coordinated omission correction. \
+                     CO correction is enabled by default to account for \
+                     coordinated omission in latency measurements."
                 )
                 .takes_value(false)
                 .required(false),

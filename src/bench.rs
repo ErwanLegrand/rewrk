@@ -50,6 +50,9 @@ pub struct BenchmarkSettings {
 
     /// Disable TLS certificate verification (for self-signed certs).
     pub insecure: bool,
+
+    /// Enable coordinated omission correction for latency stats.
+    pub co_correction: bool,
 }
 
 /// Builds the runtime with the given settings and blocks on the main future.
@@ -124,7 +127,7 @@ async fn run(settings: BenchmarkSettings) -> Result<()> {
     }
 
     if settings.display_json {
-        combiner.display_json();
+        combiner.display_json(settings.co_correction);
         return Ok(());
     }
 
@@ -135,11 +138,17 @@ async fn run(settings: BenchmarkSettings) -> Result<()> {
     }
 
     combiner.display_latencies();
+    if settings.co_correction {
+        combiner.display_latencies_corrected();
+    }
     combiner.display_requests();
     combiner.display_transfer();
 
     if settings.display_percentile {
         combiner.display_percentile_table();
+        if settings.co_correction {
+            combiner.display_percentile_table_corrected();
+        }
     }
 
     // Display errors last.
