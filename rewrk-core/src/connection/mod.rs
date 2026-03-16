@@ -1,8 +1,10 @@
 use tokio_native_tls::TlsConnector;
 
 mod conn;
+mod protocol;
 
 pub use self::conn::{ReWrkConnection, ReWrkConnector};
+pub use self::protocol::{ProtocolConnection, ProtocolConnector};
 
 /// The type of bench that is being ran.
 #[derive(Clone, Copy, Debug)]

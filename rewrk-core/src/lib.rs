@@ -116,17 +116,17 @@
 #[macro_use]
 extern crate tracing;
 
-mod connection;
+pub mod connection;
 mod producer;
 mod recording;
 mod runtime;
-mod utils;
+pub mod utils;
 mod validator;
 
 pub use async_trait::async_trait;
 pub use http;
 
-pub use self::connection::{HttpProtocol, Scheme};
+pub use self::connection::{HttpProtocol, ProtocolConnection, ProtocolConnector, Scheme};
 pub use self::producer::{Batch, Producer, ProducerBatches, RequestBatch};
 pub use self::recording::{Sample, SampleCollector};
 pub use self::runtime::{

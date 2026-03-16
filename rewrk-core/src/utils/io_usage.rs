@@ -10,14 +10,14 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 #[derive(Clone, Default)]
 /// A utility for wrapping streams and measuring the number of
 /// bytes being passed through the wrapped stream.
-pub(crate) struct IoUsageTracker {
+pub struct IoUsageTracker {
     received: Arc<AtomicU64>,
     written: Arc<AtomicU64>,
 }
 
 impl IoUsageTracker {
     /// Create a new usage tracker.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -27,11 +27,11 @@ impl IoUsageTracker {
     }
 
     /// Get the current received usage count.
-    pub(crate) fn get_received_count(&self) -> u64 {
+    pub fn get_received_count(&self) -> u64 {
         self.received.load(Ordering::SeqCst)
     }
     /// Get the current written usage count.
-    pub(crate) fn get_written_count(&self) -> u64 {
+    pub fn get_written_count(&self) -> u64 {
         self.written.load(Ordering::SeqCst)
     }
 }
