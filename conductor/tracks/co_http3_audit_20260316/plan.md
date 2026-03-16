@@ -1,6 +1,6 @@
 # Plan: CO Mitigation & HTTP/3 Readiness Audit
 
-## Phase 1: Codebase Quality Baseline
+## Phase 1: Codebase Quality Baseline [checkpoint: 22ded6c]
 
 - [x] Task: Run cargo clippy and fix all warnings [d8c3e86]
     - [x] Run `cargo clippy --all -- -D warnings` and catalog issues
