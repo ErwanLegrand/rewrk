@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 use crate::connection::{ReWrkConnection, ReWrkConnector};
 use crate::producer::{Batch, Producer, ProducerActor, ProducerBatches};
 use crate::recording::{CollectorMailbox, SampleFactory, SampleMetadata};
+use crate::runtime::expected_interval::ExpectedIntervalTracker;
 use crate::utils::RuntimeTimings;
 use crate::validator::ValidationError;
 use crate::{ResponseValidator, Sample};
@@ -283,6 +284,10 @@ pub struct WorkerConnection {
     /// This is so that timings can be adjusted while waiting for
     /// benchmarking to start, which would otherwise skew results.
     is_first_batch: bool,
+    /// Tracks the expected inter-request interval for Coordinated
+    /// Omission correction, based on the running average of observed
+    /// successful request latencies.
+    expected_interval: ExpectedIntervalTracker,
 }
 
 impl WorkerConnection {
@@ -307,6 +312,7 @@ impl WorkerConnection {
             shutdown,
             timings: RuntimeTimings::default(),
             is_first_batch: true,
+            expected_interval: ExpectedIntervalTracker::new(),
         }
     }
 
@@ -419,6 +425,8 @@ impl WorkerConnection {
             self.sample.record_error(e);
         } else {
             self.sample.record_latency(elapsed_time);
+            self.expected_interval =
+                self.expected_interval.record(elapsed_time.as_micros() as u64);
             self.sample.record_read_transfer(
                 read_transfer_start,
                 read_transfer_end,

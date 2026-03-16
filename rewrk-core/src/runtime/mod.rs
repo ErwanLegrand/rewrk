@@ -1,3 +1,4 @@
+pub(crate) mod expected_interval;
 mod worker;
 
 use std::future::Future;
