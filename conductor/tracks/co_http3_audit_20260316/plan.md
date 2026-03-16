@@ -10,11 +10,11 @@
     - [x] Install cargo-tarpaulin or cargo-llvm-cov
     - [x] Run coverage report and document current percentage
     - [x] Identify uncovered modules and critical paths
-- [ ] Task: Audit unsafe code and TLS handling
-    - [ ] Search for `unsafe` blocks and review each for soundness
-    - [ ] Review TLS certificate validation (accept_invalid_certs usage)
-    - [ ] Review input validation for CLI arguments (duration, connections, threads)
-    - [ ] Document findings and fix critical issues
+- [x] Task: Audit unsafe code and TLS handling [3b8dc29]
+    - [x] Search for `unsafe` blocks and review each for soundness (none found)
+    - [x] Review TLS certificate validation (accept_invalid_certs usage) -- fixed: gated behind --insecure flag
+    - [x] Review input validation for CLI arguments (duration, connections, threads) -- fixed: reject 0 values
+    - [x] Document findings and fix critical issues
 - [ ] Task: Conductor - User Manual Verification 'Codebase Quality Baseline' (Protocol in workflow.md)
 
 ## Phase 2: Coordinated Omission Mitigation
