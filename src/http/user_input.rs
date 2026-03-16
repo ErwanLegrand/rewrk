@@ -45,12 +45,13 @@ impl UserInput {
         method: Method,
         headers: HeaderMap,
         body: Bytes,
+        insecure: bool,
     ) -> Result<Self> {
         spawn_blocking(move || {
-            Self::blocking_new(protocol, string, method, headers, body)
+            Self::blocking_new(protocol, string, method, headers, body, insecure)
         })
         .await
-        .unwrap()
+        .map_err(|e| anyhow!("TLS setup task panicked: {}", e))?
     }
 
     fn blocking_new(
@@ -59,6 +60,7 @@ impl UserInput {
         method: Method,
         headers: HeaderMap,
         body: Bytes,
+        insecure: bool,
     ) -> Result<Self> {
         let uri = Uri::try_from(string)?;
         let scheme = uri
@@ -70,9 +72,11 @@ impl UserInput {
             "https" => {
                 let mut builder = native_tls::TlsConnector::builder();
 
-                builder
-                    .danger_accept_invalid_certs(true)
-                    .danger_accept_invalid_hostnames(true);
+                if insecure {
+                    builder
+                        .danger_accept_invalid_certs(true)
+                        .danger_accept_invalid_hostnames(true);
+                }
 
                 match protocol {
                     BenchType::HTTP1 => builder.request_alpns(&["http/1.1"]),

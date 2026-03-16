@@ -30,6 +30,10 @@ fn main() {
     let args = parse_args();
 
     let threads: usize = match args.value_of("threads").unwrap_or("1").trim().parse() {
+        Ok(0) => {
+            eprintln!("invalid parameter for 'threads': must be at least 1.");
+            return;
+        },
         Ok(v) => v,
         Err(_) => {
             eprintln!(
@@ -40,6 +44,10 @@ fn main() {
     };
 
     let conns: usize = match args.value_of("connections").unwrap_or("1").trim().parse() {
+        Ok(0) => {
+            eprintln!("invalid parameter for 'connections': must be at least 1.");
+            return;
+        },
         Ok(v) => v,
         Err(_) => {
             eprintln!("invalid parameter for 'connections' given, input type must be a integer.");
@@ -74,13 +82,19 @@ fn main() {
     };
 
     let pct: bool = args.is_present("pct");
+    let insecure: bool = args.is_present("insecure");
 
-    let rounds: usize = args
-        .value_of("rounds")
-        .unwrap_or("1")
-        .trim()
-        .parse::<usize>()
-        .unwrap_or(1);
+    let rounds: usize = match args.value_of("rounds").unwrap_or("1").trim().parse::<usize>() {
+        Ok(0) => {
+            eprintln!("invalid parameter for 'rounds': must be at least 1.");
+            return;
+        },
+        Ok(v) => v,
+        Err(_) => {
+            eprintln!("invalid parameter for 'rounds' given, input type must be a integer.");
+            return;
+        },
+    };
 
     let method = match args
         .value_of("method")
@@ -121,6 +135,7 @@ fn main() {
         method,
         headers,
         body,
+        insecure,
     };
 
     bench::start_benchmark(settings);
@@ -272,6 +287,17 @@ fn parse_args() -> ArgMatches<'static> {
                 .short("b")
                 .help("Add body to request e.g. '-b \"foo\"'")
                 .takes_value(true)
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("insecure")
+                .long("insecure")
+                .short("k")
+                .help(
+                    "Disable TLS certificate and hostname verification (for self-signed certs). \
+                     WARNING: this bypasses all TLS security checks."
+                )
+                .takes_value(false)
                 .required(false),
         )
         //.arg(

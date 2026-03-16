@@ -57,10 +57,11 @@ pub async fn start_tasks(
     headers: HeaderMap,
     body: Bytes,
     _predicted_size: usize,
+    insecure: bool,
 ) -> anyhow::Result<FuturesUnordered<Handle>> {
     let deadline = Instant::now() + time_for;
     let user_input =
-        UserInput::new(bench_type, uri_string, method, headers, body).await?;
+        UserInput::new(bench_type, uri_string, method, headers, body, insecure).await?;
 
     let handles = FuturesUnordered::new();
 

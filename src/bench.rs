@@ -47,6 +47,9 @@ pub struct BenchmarkSettings {
 
     /// Request body.
     pub body: Bytes,
+
+    /// Disable TLS certificate verification (for self-signed certs).
+    pub insecure: bool,
 }
 
 /// Builds the runtime with the given settings and blocks on the main future.
@@ -94,6 +97,7 @@ async fn run(settings: BenchmarkSettings) -> Result<()> {
         settings.headers,
         settings.body,
         predict_size as usize,
+        settings.insecure,
     )
     .await;
 

@@ -81,6 +81,10 @@ where
     /// This sets up the connector and collector actor.
     ///
     /// Once created benchmarks can be started by calling the `run` method.
+    ///
+    /// Set `insecure` to `true` to disable TLS certificate and hostname
+    /// verification. This is intended only for local development servers
+    /// that use self-signed certificates.
     pub async fn create(
         base_uri: Uri,
         concurrency: usize,
@@ -88,7 +92,23 @@ where
         producer: P,
         collector: C,
     ) -> Result<Self, Error> {
-        let connector = create_connector(base_uri, protocol)?;
+        Self::create_with_tls(base_uri, concurrency, protocol, producer, collector, false).await
+    }
+
+    /// Creates a new [ReWrkBenchmark] with an explicit TLS insecure flag.
+    ///
+    /// When `insecure` is `true`, TLS certificate and hostname verification
+    /// are disabled. Use only for local development targets with self-signed
+    /// certificates.
+    pub async fn create_with_tls(
+        base_uri: Uri,
+        concurrency: usize,
+        protocol: HttpProtocol,
+        producer: P,
+        collector: C,
+        insecure: bool,
+    ) -> Result<Self, Error> {
+        let connector = create_connector(base_uri, protocol, insecure)?;
         let (collector_handle, collector) = CollectorActor::spawn(collector).await;
         let shutdown = ShutdownHandle::default();
         let worker_config = WorkerConfig {
@@ -182,16 +202,25 @@ where
 }
 
 /// Creates a new [ReWrkConnector] using a provided protocol and URI.
-fn create_connector(uri: Uri, protocol: HttpProtocol) -> Result<ReWrkConnector, Error> {
+///
+/// When `insecure` is `true`, TLS certificate and hostname verification are
+/// disabled. This must only be used for local development targets.
+fn create_connector(
+    uri: Uri,
+    protocol: HttpProtocol,
+    insecure: bool,
+) -> Result<ReWrkConnector, Error> {
     let scheme = uri.scheme_str().ok_or(Error::MissingScheme)?;
     let scheme = match scheme {
         "http" => Scheme::Http,
         "https" => {
             let mut builder = native_tls::TlsConnector::builder();
 
-            builder
-                .danger_accept_invalid_certs(true)
-                .danger_accept_invalid_hostnames(true);
+            if insecure {
+                builder
+                    .danger_accept_invalid_certs(true)
+                    .danger_accept_invalid_hostnames(true);
+            }
 
             match protocol {
                 HttpProtocol::HTTP1 => builder.request_alpns(&["http/1.1"]),
