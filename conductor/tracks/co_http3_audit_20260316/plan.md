@@ -19,10 +19,10 @@
 
 ## Phase 2: Coordinated Omission Mitigation
 
-- [ ] Task: Implement expected interval tracking per connection
-    - [ ] Write tests for expected interval calculation from observed service times
-    - [ ] Add expected interval tracking to the worker's per-connection request loop in `rewrk-core/src/runtime/worker.rs`
-    - [ ] Verify tests pass
+- [x] Task: Implement expected interval tracking per connection [ceed6fc]
+    - [x] Write tests for expected interval calculation from observed service times
+    - [x] Add expected interval tracking to the worker's per-connection request loop in `rewrk-core/src/runtime/worker.rs`
+    - [x] Verify tests pass
 - [ ] Task: Integrate CO-corrected histogram recording
     - [ ] Write tests verifying `record_correct()` produces different percentiles than `record()` under simulated latency spikes
     - [ ] Modify `Sample` to carry both uncorrected and CO-corrected histograms
