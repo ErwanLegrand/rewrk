@@ -28,12 +28,12 @@
     - [x] Modify `Sample` to carry both uncorrected and CO-corrected histograms
     - [x] Use `hdrhistogram::Histogram::record_correct(value, expected_interval)` in the recording path
     - [x] Verify tests pass
-- [ ] Task: Expose CO-corrected statistics in CLI output
-    - [ ] Write tests for result formatting with both corrected and uncorrected values
-    - [ ] Update `src/results.rs` to display CO-corrected latency alongside uncorrected
-    - [ ] Update `--json` output to include `latency_corrected` object
-    - [ ] Add `--no-co-correction` CLI flag (CO correction on by default)
-    - [ ] Verify tests pass
+- [x] Task: Expose CO-corrected statistics in CLI output [0898433]
+    - [x] Write tests for result formatting with both corrected and uncorrected values
+    - [x] Update `src/results.rs` to display CO-corrected latency alongside uncorrected
+    - [x] Update `--json` output to include `latency_corrected` object
+    - [x] Add `--no-co-correction` CLI flag (CO correction on by default)
+    - [x] Verify tests pass
 - [ ] Task: Validate CO correction with synthetic latency spike test
     - [ ] Write an integration test with an axum server that introduces artificial latency spikes
     - [ ] Assert that CO-corrected p99 is significantly higher than uncorrected p99
