@@ -17,7 +17,7 @@
     - [x] Document findings and fix critical issues
 - [x] Task: Conductor - User Manual Verification 'Codebase Quality Baseline' (Protocol in workflow.md)
 
-## Phase 2: Coordinated Omission Mitigation
+## Phase 2: Coordinated Omission Mitigation [checkpoint: d59bef0]
 
 - [x] Task: Implement expected interval tracking per connection [ceed6fc]
     - [x] Write tests for expected interval calculation from observed service times
