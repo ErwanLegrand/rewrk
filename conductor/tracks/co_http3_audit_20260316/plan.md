@@ -42,11 +42,11 @@
 
 ## Phase 3: Protocol-Agnostic Connection Layer
 
-- [ ] Task: Define ProtocolConnector trait
-    - [ ] Write tests for trait interface contract (connect, execute, IO tracking)
-    - [ ] Design `ProtocolConnector` trait in a new module `rewrk-core/src/connection/protocol.rs`
-    - [ ] Define associated types for connection state, request execution, and IO measurement
-    - [ ] Verify tests pass
+- [x] Task: Define ProtocolConnector trait [d99f3d8]
+    - [x] Write tests for trait interface contract (connect, execute, IO tracking)
+    - [x] Design `ProtocolConnector` trait in a new module `rewrk-core/src/connection/protocol.rs`
+    - [x] Define associated types for connection state, request execution, and IO measurement
+    - [x] Verify tests pass
 - [ ] Task: Implement Http1Connector
     - [ ] Write tests for HTTP/1.1 connection establishment and request execution
     - [ ] Extract HTTP/1 logic from `ReWrkConnector` into `Http1Connector` implementing `ProtocolConnector`
