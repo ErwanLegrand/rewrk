@@ -23,11 +23,11 @@
     - [x] Write tests for expected interval calculation from observed service times
     - [x] Add expected interval tracking to the worker's per-connection request loop in `rewrk-core/src/runtime/worker.rs`
     - [x] Verify tests pass
-- [ ] Task: Integrate CO-corrected histogram recording
-    - [ ] Write tests verifying `record_correct()` produces different percentiles than `record()` under simulated latency spikes
-    - [ ] Modify `Sample` to carry both uncorrected and CO-corrected histograms
-    - [ ] Use `hdrhistogram::Histogram::record_correct(value, expected_interval)` in the recording path
-    - [ ] Verify tests pass
+- [x] Task: Integrate CO-corrected histogram recording [86e9208]
+    - [x] Write tests verifying `record_correct()` produces different percentiles than `record()` under simulated latency spikes
+    - [x] Modify `Sample` to carry both uncorrected and CO-corrected histograms
+    - [x] Use `hdrhistogram::Histogram::record_correct(value, expected_interval)` in the recording path
+    - [x] Verify tests pass
 - [ ] Task: Expose CO-corrected statistics in CLI output
     - [ ] Write tests for result formatting with both corrected and uncorrected values
     - [ ] Update `src/results.rs` to display CO-corrected latency alongside uncorrected
