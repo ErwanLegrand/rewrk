@@ -56,6 +56,7 @@ impl SampleFactory {
         Sample {
             tag,
             latency_hist: Histogram::new(2).unwrap(),
+            corrected_latency_hist: Histogram::new(2).unwrap(),
             write_transfer_hist: Histogram::new(2).unwrap(),
             read_transfer_hist: Histogram::new(2).unwrap(),
             errors: Vec::with_capacity(4),
@@ -91,6 +92,7 @@ impl SampleFactory {
 pub struct Sample {
     tag: usize,
     latency_hist: Histogram<u32>,
+    corrected_latency_hist: Histogram<u32>,
     write_transfer_hist: Histogram<u32>,
     read_transfer_hist: Histogram<u32>,
 
@@ -116,6 +118,11 @@ impl Sample {
     /// The sample latency histogram
     pub fn latency(&self) -> &Histogram<u32> {
         &self.latency_hist
+    }
+
+    /// The CO-corrected latency histogram.
+    pub fn corrected_latency(&self) -> &Histogram<u32> {
+        &self.corrected_latency_hist
     }
 
     /// The sample write transfer rate histogram
@@ -150,6 +157,24 @@ impl Sample {
     }
 
     #[inline]
+    /// Record a CO-corrected latency duration.
+    ///
+    /// Uses `hdrhistogram::Histogram::record_correct` to fill in synthetic
+    /// values that compensate for coordinated omission. The
+    /// `expected_interval_us` is the expected inter-request interval in
+    /// microseconds.
+    pub(crate) fn record_latency_corrected(
+        &mut self,
+        dur: Duration,
+        expected_interval_us: u64,
+    ) {
+        let micros = dur.as_micros() as u64;
+        self.corrected_latency_hist
+            .record_correct(micros, expected_interval_us)
+            .expect("Record corrected value");
+    }
+
+    #[inline]
     /// Record a write transfer rate.
     pub(crate) fn record_write_transfer(
         &mut self,
@@ -179,4 +204,123 @@ impl Sample {
 #[inline]
 fn calculate_rate(start: u64, stop: u64, dur: Duration) -> u64 {
     ((stop - start) as f64 / dur.as_secs_f64()).round() as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: create a blank sample for testing.
+    fn test_sample() -> Sample {
+        Sample {
+            tag: 0,
+            latency_hist: Histogram::new(2).unwrap(),
+            corrected_latency_hist: Histogram::new(2).unwrap(),
+            write_transfer_hist: Histogram::new(2).unwrap(),
+            read_transfer_hist: Histogram::new(2).unwrap(),
+            errors: Vec::new(),
+            metadata: SampleMetadata { worker_id: 0 },
+        }
+    }
+
+    #[test]
+    fn corrected_latency_accessor_returns_corrected_histogram() {
+        let mut sample = test_sample();
+        let dur = Duration::from_micros(500);
+        sample.record_latency_corrected(dur, 500);
+
+        assert_eq!(sample.corrected_latency().len(), 1);
+        assert!(sample.corrected_latency().max() >= 500);
+    }
+
+    #[test]
+    fn record_correct_with_spike_produces_more_entries_than_record() {
+        let mut sample = test_sample();
+
+        // Simulate 9 normal requests at 1000us, then one spike at 10_000us.
+        let expected_interval_us: u64 = 1000;
+
+        for _ in 0..9 {
+            let dur = Duration::from_micros(expected_interval_us);
+            sample.record_latency(dur);
+            sample.record_latency_corrected(dur, expected_interval_us);
+        }
+
+        // Latency spike: 10x the expected interval.
+        let spike = Duration::from_micros(10_000);
+        sample.record_latency(spike);
+        sample.record_latency_corrected(spike, expected_interval_us);
+
+        // The uncorrected histogram should have exactly 10 entries.
+        assert_eq!(sample.latency().len(), 10);
+
+        // The corrected histogram should have MORE entries because
+        // record_correct fills in synthetic values for the spike.
+        assert!(
+            sample.corrected_latency().len() > sample.latency().len(),
+            "corrected histogram ({}) should have more entries than uncorrected ({})",
+            sample.corrected_latency().len(),
+            sample.latency().len(),
+        );
+    }
+
+    #[test]
+    fn record_correct_with_spike_shifts_percentiles_higher() {
+        let mut sample = test_sample();
+
+        let expected_interval_us: u64 = 1000;
+
+        for _ in 0..9 {
+            let dur = Duration::from_micros(expected_interval_us);
+            sample.record_latency(dur);
+            sample.record_latency_corrected(dur, expected_interval_us);
+        }
+
+        let spike = Duration::from_micros(10_000);
+        sample.record_latency(spike);
+        sample.record_latency_corrected(spike, expected_interval_us);
+
+        // The corrected p99 should be >= the uncorrected p99 because
+        // CO correction fills in missed measurements during the spike.
+        let uncorrected_p99 = sample.latency().value_at_percentile(99.0);
+        let corrected_p99 = sample.corrected_latency().value_at_percentile(99.0);
+
+        assert!(
+            corrected_p99 >= uncorrected_p99,
+            "corrected p99 ({}) should be >= uncorrected p99 ({})",
+            corrected_p99,
+            uncorrected_p99,
+        );
+    }
+
+    #[test]
+    fn record_and_record_correct_equivalent_when_value_equals_interval() {
+        let mut sample = test_sample();
+
+        // When every value equals the expected interval, record_correct
+        // should NOT add any synthetic entries.
+        let interval_us: u64 = 1000;
+
+        for _ in 0..100 {
+            let dur = Duration::from_micros(interval_us);
+            sample.record_latency(dur);
+            sample.record_latency_corrected(dur, interval_us);
+        }
+
+        assert_eq!(
+            sample.latency().len(),
+            sample.corrected_latency().len(),
+            "when value == expected_interval, both histograms should have the same count"
+        );
+
+        // Percentiles should also match.
+        assert_eq!(
+            sample.latency().value_at_percentile(50.0),
+            sample.corrected_latency().value_at_percentile(50.0),
+        );
+        assert_eq!(
+            sample.latency().value_at_percentile(99.0),
+            sample.corrected_latency().value_at_percentile(99.0),
+        );
+    }
 }

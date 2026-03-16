@@ -425,6 +425,10 @@ impl WorkerConnection {
             self.sample.record_error(e);
         } else {
             self.sample.record_latency(elapsed_time);
+            if let Some(interval) = self.expected_interval.expected_interval_us() {
+                self.sample
+                    .record_latency_corrected(elapsed_time, interval);
+            }
             self.expected_interval =
                 self.expected_interval.record(elapsed_time.as_micros() as u64);
             self.sample.record_read_transfer(
