@@ -6,10 +6,10 @@
     - [x] Run `cargo clippy --all -- -D warnings` and catalog issues
     - [x] Fix all clippy warnings across both crates
     - [x] Verify clean clippy run
-- [ ] Task: Establish test coverage baseline
-    - [ ] Install cargo-tarpaulin or cargo-llvm-cov
-    - [ ] Run coverage report and document current percentage
-    - [ ] Identify uncovered modules and critical paths
+- [x] Task: Establish test coverage baseline (44.27% -- rewrk-core ~65%, CLI 0%)
+    - [x] Install cargo-tarpaulin or cargo-llvm-cov
+    - [x] Run coverage report and document current percentage
+    - [x] Identify uncovered modules and critical paths
 - [ ] Task: Audit unsafe code and TLS handling
     - [ ] Search for `unsafe` blocks and review each for soundness
     - [ ] Review TLS certificate validation (accept_invalid_certs usage)
