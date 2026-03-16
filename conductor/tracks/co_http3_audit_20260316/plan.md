@@ -34,10 +34,10 @@
     - [x] Update `--json` output to include `latency_corrected` object
     - [x] Add `--no-co-correction` CLI flag (CO correction on by default)
     - [x] Verify tests pass
-- [ ] Task: Validate CO correction with synthetic latency spike test
-    - [ ] Write an integration test with an axum server that introduces artificial latency spikes
-    - [ ] Assert that CO-corrected p99 is significantly higher than uncorrected p99
-    - [ ] Verify the test demonstrates the CO effect clearly
+- [x] Task: Validate CO correction with synthetic latency spike test [a3c7279]
+    - [x] Write an integration test with an axum server that introduces artificial latency spikes
+    - [x] Assert that CO-corrected p99 is significantly higher than uncorrected p99
+    - [x] Verify the test demonstrates the CO effect clearly
 - [ ] Task: Conductor - User Manual Verification 'Coordinated Omission Mitigation' (Protocol in workflow.md)
 
 ## Phase 3: Protocol-Agnostic Connection Layer
