@@ -1,7 +1,6 @@
 mod worker;
 
 use std::future::Future;
-use std::io::ErrorKind;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Duration;
@@ -223,8 +222,7 @@ fn create_connector(uri: Uri, protocol: HttpProtocol) -> Result<ReWrkConnector, 
         }
     }
     let addr = last_addr.ok_or_else(|| {
-        Error::AddressLookup(io::Error::new(
-            ErrorKind::Other,
+        Error::AddressLookup(io::Error::other(
             "Failed to lookup hostname",
         ))
     })?;

@@ -2,7 +2,7 @@ use tokio_native_tls::TlsConnector;
 
 mod conn;
 
-pub use self::conn::{HttpStream, ReWrkConnection, ReWrkConnector};
+pub use self::conn::{ReWrkConnection, ReWrkConnector};
 
 /// The type of bench that is being ran.
 #[derive(Clone, Copy, Debug)]
