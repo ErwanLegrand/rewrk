@@ -47,10 +47,10 @@
     - [x] Design `ProtocolConnector` trait in a new module `rewrk-core/src/connection/protocol.rs`
     - [x] Define associated types for connection state, request execution, and IO measurement
     - [x] Verify tests pass
-- [ ] Task: Implement Http1Connector
-    - [ ] Write tests for HTTP/1.1 connection establishment and request execution
-    - [ ] Extract HTTP/1 logic from `ReWrkConnector` into `Http1Connector` implementing `ProtocolConnector`
-    - [ ] Verify tests pass and existing integration tests still pass
+- [x] Task: Implement Http1Connector [cbd9069]
+    - [x] Write tests for HTTP/1.1 connection establishment and request execution
+    - [x] Extract HTTP/1 logic from `ReWrkConnector` into `Http1Connector` implementing `ProtocolConnector`
+    - [x] Verify tests pass and existing integration tests still pass
 - [ ] Task: Implement Http2Connector
     - [ ] Write tests for HTTP/2 connection establishment and request execution
     - [ ] Extract HTTP/2 logic from `ReWrkConnector` into `Http2Connector` implementing `ProtocolConnector`
