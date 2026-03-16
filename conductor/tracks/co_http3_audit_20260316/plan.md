@@ -51,10 +51,10 @@
     - [x] Write tests for HTTP/1.1 connection establishment and request execution
     - [x] Extract HTTP/1 logic from `ReWrkConnector` into `Http1Connector` implementing `ProtocolConnector`
     - [x] Verify tests pass and existing integration tests still pass
-- [ ] Task: Implement Http2Connector
-    - [ ] Write tests for HTTP/2 connection establishment and request execution
-    - [ ] Extract HTTP/2 logic from `ReWrkConnector` into `Http2Connector` implementing `ProtocolConnector`
-    - [ ] Verify tests pass and existing integration tests still pass
+- [x] Task: Implement Http2Connector [d5ddd55]
+    - [x] Write tests for HTTP/2 connection establishment and request execution
+    - [x] Extract HTTP/2 logic from `ReWrkConnector` into `Http2Connector` implementing `ProtocolConnector`
+    - [x] Verify tests pass and existing integration tests still pass
 - [ ] Task: Refactor ReWrkConnector to dispatch via ProtocolConnector
     - [ ] Write tests for protocol dispatch (HTTP/1 vs HTTP/2 selection)
     - [ ] Refactor `ReWrkConnector` to hold a `Box<dyn ProtocolConnector>` (or enum dispatch)
