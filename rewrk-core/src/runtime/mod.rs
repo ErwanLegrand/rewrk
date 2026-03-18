@@ -11,7 +11,7 @@ use http::{HeaderValue, Uri};
 use tokio_native_tls::TlsConnector;
 
 pub(crate) use self::worker::{spawn_workers, ShutdownHandle, WorkerConfig};
-use crate::connection::ReWrkConnector;
+use crate::connection::{Http1Connector, Http2Connector, ReWrkConnector};
 use crate::producer::Producer;
 use crate::recording::CollectorActor;
 use crate::{
@@ -21,6 +21,9 @@ use crate::{
     SampleCollector,
     Scheme,
 };
+
+/// The maximum number of attempts to try connecting before aborting.
+const RETRY_MAX_DEFAULT: usize = 3;
 
 /// The default percentage workers must be waiting on
 /// producers for in order to raise a warning.
@@ -69,7 +72,7 @@ where
     collector_handle: CollectorActor<C>,
     num_workers: usize,
     concurrency: usize,
-    worker_config: WorkerConfig<P>,
+    worker_config: WorkerConfig<P, ReWrkConnector>,
 }
 
 impl<P, C> ReWrkBenchmark<P, C>
@@ -114,6 +117,7 @@ where
         let shutdown = ShutdownHandle::default();
         let worker_config = WorkerConfig {
             connector,
+            retry_max: RETRY_MAX_DEFAULT,
             validator: Arc::new(DefaultValidator),
             collector,
             producer,
@@ -173,7 +177,7 @@ where
     /// Sets the maximum number of times the connector will attempt
     /// to connect to the server before error.
     pub fn set_connection_retry_max(&mut self, max: usize) {
-        self.worker_config.connector.set_retry_max(max)
+        self.worker_config.retry_max = max;
     }
 
     /// Sets the benchmark validator.
@@ -259,7 +263,22 @@ fn create_connector(
     let host_header = HeaderValue::from_str(host).map_err(|_| Error::MissingHost)?;
     let host = host.to_string();
 
-    let connector = ReWrkConnector::new(uri, host_header, addr, protocol, scheme, host);
+    let connector = match protocol {
+        HttpProtocol::HTTP1 => ReWrkConnector::http1(Http1Connector::new(
+            addr,
+            scheme,
+            host,
+            uri,
+            host_header,
+        )),
+        HttpProtocol::HTTP2 => ReWrkConnector::http2(Http2Connector::new(
+            addr,
+            scheme,
+            host,
+            uri,
+            host_header,
+        )),
+    };
 
     Ok(connector)
 }
