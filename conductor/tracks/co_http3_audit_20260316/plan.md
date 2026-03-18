@@ -40,7 +40,7 @@
     - [x] Verify the test demonstrates the CO effect clearly
 - [x] Task: Conductor - User Manual Verification 'Coordinated Omission Mitigation' (Protocol in workflow.md)
 
-## Phase 3: Protocol-Agnostic Connection Layer
+## Phase 3: Protocol-Agnostic Connection Layer [checkpoint: 3cedfc7]
 
 - [x] Task: Define ProtocolConnector trait [d99f3d8]
     - [x] Write tests for trait interface contract (connect, execute, IO tracking)
@@ -64,7 +64,7 @@
     - [x] Create a stub `Http3Connector` that implements `ProtocolConnector` with `unimplemented!()` bodies
     - [x] Write a compile-only test that instantiates it to prove the trait is sufficient
     - [x] Document the trait interface with examples for future HTTP/3 implementation
-- [~] Task: Conductor - User Manual Verification 'Protocol-Agnostic Connection Layer' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Protocol-Agnostic Connection Layer' (Protocol in workflow.md)
 
 ## Phase 4: Test Coverage & Final Hardening
 
