@@ -9,8 +9,9 @@ use http::Request;
 use hyper::Body;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use tokio::time::{timeout_at, Instant as TokioInstant};
 
-use crate::connection::{ReWrkConnection, ReWrkConnector};
+use crate::connection::{ProtocolConnection, ProtocolConnector};
 use crate::producer::{Batch, Producer, ProducerActor, ProducerBatches};
 use crate::recording::{CollectorMailbox, SampleFactory, SampleMetadata};
 use crate::runtime::expected_interval::ExpectedIntervalTracker;
@@ -23,12 +24,15 @@ type ConnectionTask = JoinHandle<RuntimeTimings>;
 type WorkerGuard = flume::Receiver<()>;
 
 #[derive(Clone)]
-pub(crate) struct WorkerConfig<P>
+pub(crate) struct WorkerConfig<P, C>
 where
     P: Producer + Clone,
+    C: ProtocolConnector,
 {
     /// The benchmarking connector.
-    pub connector: ReWrkConnector,
+    pub connector: C,
+    /// The maximum number of retry attempts for connecting.
+    pub retry_max: usize,
     /// The selected validator for the benchmark.
     pub validator: Arc<dyn ResponseValidator>,
     /// The sample results collector.
@@ -47,14 +51,15 @@ where
 }
 
 /// Spawns N worker runtimes for executing search requests.
-pub(crate) fn spawn_workers<P>(
+pub(crate) fn spawn_workers<P, C>(
     shutdown: ShutdownHandle,
     num_workers: usize,
     concurrency: usize,
-    config: WorkerConfig<P>,
+    config: WorkerConfig<P, C>,
 ) -> WorkerGuard
 where
     P: Producer + Clone,
+    C: ProtocolConnector + 'static,
 {
     // We use a channel here as a guard in order to wait for all workers to shutdown.
     let (guard, waiter) = flume::bounded(1);
@@ -84,14 +89,15 @@ where
 }
 
 /// Spawns a new runtime worker thread.
-fn spawn_worker<P>(
+fn spawn_worker<P, C>(
     worker_id: usize,
     concurrency: usize,
     guard: flume::Sender<()>,
     handle: ShutdownHandle,
-    config: WorkerConfig<P>,
+    config: WorkerConfig<P, C>,
 ) where
     P: Producer + Clone,
+    C: ProtocolConnector + 'static,
 {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -116,13 +122,14 @@ fn spawn_worker<P>(
 /// Runs a worker task.
 ///
 /// This acts as the main runtime entrypoint.
-async fn run_worker<P>(
+async fn run_worker<P, C>(
     worker_id: usize,
     concurrency: usize,
     shutdown: ShutdownHandle,
-    config: WorkerConfig<P>,
+    config: WorkerConfig<P, C>,
 ) where
     P: Producer + Clone,
+    C: ProtocolConnector + 'static,
 {
     let (ready_tx, ready_rx) = oneshot::channel();
     let producer =
@@ -137,6 +144,7 @@ async fn run_worker<P>(
         let task_opt = create_worker_connection(
             worker_id,
             &config.connector,
+            config.retry_max,
             shutdown.clone(),
             sample_factory.clone(),
             config.validator.clone(),
@@ -188,15 +196,62 @@ async fn run_worker<P>(
     }
 }
 
-async fn create_worker_connection(
+/// Establish a connection using any [`ProtocolConnector`], with retry and timeout logic.
+///
+/// Returns `Ok(Some(conn))` on success, `Ok(None)` if the timeout elapsed without
+/// any connection error, or `Err(e)` if all retry attempts failed or the timeout
+/// elapsed after at least one error.
+async fn connect_with_timeout<C>(
+    connector: &C,
+    dur: Duration,
+    retry_max: usize,
+) -> anyhow::Result<Option<C::Connection>>
+where
+    C: ProtocolConnector,
+{
+    let deadline = TokioInstant::now() + dur;
+    let mut last_error: Option<anyhow::Error> = None;
+    let mut attempts_left = retry_max;
+
+    loop {
+        let result = timeout_at(deadline, connector.connect()).await;
+
+        match result {
+            Err(_) => {
+                return if let Some(error) = last_error {
+                    Err(error)
+                } else {
+                    Ok(None)
+                }
+            },
+            Ok(Err(e)) => {
+                if attempts_left == 0 {
+                    return Err(e);
+                }
+
+                attempts_left -= 1;
+                last_error = Some(e);
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            },
+            Ok(Ok(connection)) => return Ok(Some(connection)),
+        }
+    }
+}
+
+async fn create_worker_connection<C>(
     worker_id: usize,
-    connector: &ReWrkConnector,
+    connector: &C,
+    retry_max: usize,
     shutdown: ShutdownHandle,
     sample_factory: SampleFactory,
     validator: Arc<dyn ResponseValidator>,
     producer: ProducerBatches,
-) -> Option<ConnectionTask> {
-    let connect_result = connector.connect_timeout(CONNECT_TIMEOUT).await;
+) -> Option<ConnectionTask>
+where
+    C: ProtocolConnector + 'static,
+{
+    let connect_result =
+        connect_with_timeout(connector, CONNECT_TIMEOUT, retry_max).await;
     let conn = match connect_result {
         Err(e) => {
             // We check this to prevent spam of the logs.
@@ -261,9 +316,9 @@ impl ShutdownHandle {
     }
 }
 
-pub struct WorkerConnection {
-    /// The ReWrk benchmarking connection.
-    conn: ReWrkConnection,
+pub struct WorkerConnection<Conn: ProtocolConnection> {
+    /// The protocol connection for benchmarking.
+    conn: Conn,
     /// The sample factory for producing metric samples.
     sample_factory: SampleFactory,
     /// The current sample being populated with metrics.
@@ -290,10 +345,10 @@ pub struct WorkerConnection {
     expected_interval: ExpectedIntervalTracker,
 }
 
-impl WorkerConnection {
+impl<Conn: ProtocolConnection> WorkerConnection<Conn> {
     /// Create a new worker instance
     fn new(
-        conn: ReWrkConnection,
+        conn: Conn,
         sample_factory: SampleFactory,
         validator: Arc<dyn ResponseValidator>,
         producer: ProducerBatches,
