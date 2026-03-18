@@ -60,10 +60,10 @@
     - [x] Refactor `ReWrkConnector` to hold a `Box<dyn ProtocolConnector>` (or enum dispatch)
     - [x] Remove duplicated protocol-specific code from the original connector
     - [x] Verify all existing tests still pass (no behavioral change)
-- [ ] Task: Add Http3Connector stub for compile-time validation
-    - [ ] Create a stub `Http3Connector` that implements `ProtocolConnector` with `unimplemented!()` bodies
-    - [ ] Write a compile-only test that instantiates it to prove the trait is sufficient
-    - [ ] Document the trait interface with examples for future HTTP/3 implementation
+- [x] Task: Add Http3Connector stub for compile-time validation [ba99b89]
+    - [x] Create a stub `Http3Connector` that implements `ProtocolConnector` with `unimplemented!()` bodies
+    - [x] Write a compile-only test that instantiates it to prove the trait is sufficient
+    - [x] Document the trait interface with examples for future HTTP/3 implementation
 - [ ] Task: Conductor - User Manual Verification 'Protocol-Agnostic Connection Layer' (Protocol in workflow.md)
 
 ## Phase 4: Test Coverage & Final Hardening
