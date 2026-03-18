@@ -64,7 +64,7 @@
     - [x] Create a stub `Http3Connector` that implements `ProtocolConnector` with `unimplemented!()` bodies
     - [x] Write a compile-only test that instantiates it to prove the trait is sufficient
     - [x] Document the trait interface with examples for future HTTP/3 implementation
-- [ ] Task: Conductor - User Manual Verification 'Protocol-Agnostic Connection Layer' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Protocol-Agnostic Connection Layer' (Protocol in workflow.md)
 
 ## Phase 4: Test Coverage & Final Hardening
 
