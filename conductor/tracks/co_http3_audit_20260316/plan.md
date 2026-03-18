@@ -55,11 +55,11 @@
     - [x] Write tests for HTTP/2 connection establishment and request execution
     - [x] Extract HTTP/2 logic from `ReWrkConnector` into `Http2Connector` implementing `ProtocolConnector`
     - [x] Verify tests pass and existing integration tests still pass
-- [ ] Task: Refactor ReWrkConnector to dispatch via ProtocolConnector
-    - [ ] Write tests for protocol dispatch (HTTP/1 vs HTTP/2 selection)
-    - [ ] Refactor `ReWrkConnector` to hold a `Box<dyn ProtocolConnector>` (or enum dispatch)
-    - [ ] Remove duplicated protocol-specific code from the original connector
-    - [ ] Verify all existing tests still pass (no behavioral change)
+- [x] Task: Refactor ReWrkConnector to dispatch via ProtocolConnector [bc6c2d0]
+    - [x] Write tests for protocol dispatch (HTTP/1 vs HTTP/2 selection)
+    - [x] Refactor `ReWrkConnector` to hold a `Box<dyn ProtocolConnector>` (or enum dispatch)
+    - [x] Remove duplicated protocol-specific code from the original connector
+    - [x] Verify all existing tests still pass (no behavioral change)
 - [ ] Task: Add Http3Connector stub for compile-time validation
     - [ ] Create a stub `Http3Connector` that implements `ProtocolConnector` with `unimplemented!()` bodies
     - [ ] Write a compile-only test that instantiates it to prove the trait is sufficient
