@@ -90,3 +90,57 @@ impl<I: AsyncWrite> AsyncWrite for RecordStream<I> {
         self.project().inner.poll_shutdown(cx)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::*;
+
+    #[test]
+    fn test_new_tracker_zeroed() {
+        let tracker = IoUsageTracker::new();
+        assert_eq!(tracker.get_received_count(), 0);
+        assert_eq!(tracker.get_written_count(), 0);
+    }
+
+    #[test]
+    fn test_tracker_clone_shares_state() {
+        let tracker = IoUsageTracker::new();
+        let clone = tracker.clone();
+
+        tracker.received.fetch_add(100, Ordering::SeqCst);
+        tracker.written.fetch_add(200, Ordering::SeqCst);
+
+        assert_eq!(clone.get_received_count(), 100);
+        assert_eq!(clone.get_written_count(), 200);
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_tracks_writes() {
+        let tracker = IoUsageTracker::new();
+        let (client, _server) = tokio::io::duplex(1024);
+        let mut stream = tracker.wrap_stream(client);
+
+        let data = b"hello world";
+        stream.write_all(data).await.unwrap();
+
+        assert_eq!(tracker.get_written_count(), data.len() as u64);
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_tracks_reads() {
+        let tracker = IoUsageTracker::new();
+        let (mut server, client) = tokio::io::duplex(1024);
+        let mut stream = tracker.wrap_stream(client);
+
+        let data = b"hello world";
+        server.write_all(data).await.unwrap();
+        drop(server);
+
+        let mut buf = vec![0u8; data.len()];
+        stream.read_exact(&mut buf).await.unwrap();
+
+        assert_eq!(tracker.get_received_count(), data.len() as u64);
+    }
+}

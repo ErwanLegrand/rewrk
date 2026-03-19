@@ -323,4 +323,107 @@ mod tests {
             sample.corrected_latency().value_at_percentile(99.0),
         );
     }
+
+    #[test]
+    fn test_sample_creation_defaults() {
+        let sample = test_sample();
+        assert_eq!(sample.tag(), 0);
+        assert_eq!(sample.metadata().worker_id, 0);
+        assert_eq!(sample.latency().len(), 0);
+        assert_eq!(sample.corrected_latency().len(), 0);
+        assert_eq!(sample.write_transfer().len(), 0);
+        assert_eq!(sample.read_transfer().len(), 0);
+        assert!(sample.errors.is_empty());
+    }
+
+    #[test]
+    fn test_sample_tag_accessor() {
+        let sample = Sample {
+            tag: 42,
+            latency_hist: Histogram::new(2).unwrap(),
+            corrected_latency_hist: Histogram::new(2).unwrap(),
+            write_transfer_hist: Histogram::new(2).unwrap(),
+            read_transfer_hist: Histogram::new(2).unwrap(),
+            errors: Vec::new(),
+            metadata: SampleMetadata { worker_id: 0 },
+        };
+        assert_eq!(sample.tag(), 42);
+    }
+
+    #[test]
+    fn test_record_latency_single() {
+        let mut sample = test_sample();
+        sample.record_latency(Duration::from_micros(250));
+        assert_eq!(sample.latency().len(), 1);
+        assert!(sample.latency().max() >= 250);
+    }
+
+    #[test]
+    fn test_record_latency_multiple() {
+        let mut sample = test_sample();
+        sample.record_latency(Duration::from_micros(100));
+        sample.record_latency(Duration::from_micros(500));
+        sample.record_latency(Duration::from_micros(1000));
+        assert_eq!(sample.latency().len(), 3);
+        assert!(sample.latency().min() <= 100);
+        assert!(sample.latency().max() >= 1000);
+    }
+
+    #[test]
+    fn test_record_write_transfer() {
+        let mut sample = test_sample();
+        // 1000 bytes over 1 second = 1000 bytes/sec
+        sample.record_write_transfer(0, 1000, Duration::from_secs(1));
+        assert_eq!(sample.write_transfer().len(), 1);
+        assert!(sample.write_transfer().max() > 0);
+    }
+
+    #[test]
+    fn test_record_read_transfer() {
+        let mut sample = test_sample();
+        // 2000 bytes over 1 second = 2000 bytes/sec
+        sample.record_read_transfer(0, 2000, Duration::from_secs(1));
+        assert_eq!(sample.read_transfer().len(), 1);
+        assert!(sample.read_transfer().max() > 0);
+    }
+
+    #[test]
+    fn test_record_error_single() {
+        let mut sample = test_sample();
+        sample.record_error(ValidationError::ConnectionAborted);
+        assert_eq!(sample.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_record_error_multiple_types() {
+        let mut sample = test_sample();
+        sample.record_error(ValidationError::ConnectionAborted);
+        sample.record_error(ValidationError::Timeout);
+        sample.record_error(ValidationError::InvalidStatus(404));
+        assert_eq!(sample.errors.len(), 3);
+    }
+
+    #[test]
+    fn test_record_error_classification() {
+        let mut sample = test_sample();
+        sample.record_error(ValidationError::InvalidStatus(500));
+        sample.record_error(ValidationError::Timeout);
+
+        assert!(matches!(sample.errors[0], ValidationError::InvalidStatus(500)));
+        assert!(matches!(sample.errors[1], ValidationError::Timeout));
+    }
+
+    #[test]
+    fn test_metadata_accessor() {
+        let sample = Sample {
+            tag: 0,
+            latency_hist: Histogram::new(2).unwrap(),
+            corrected_latency_hist: Histogram::new(2).unwrap(),
+            write_transfer_hist: Histogram::new(2).unwrap(),
+            read_transfer_hist: Histogram::new(2).unwrap(),
+            errors: Vec::new(),
+            metadata: SampleMetadata { worker_id: 7 },
+        };
+        assert_eq!(sample.metadata().worker_id, 7);
+    }
 }
