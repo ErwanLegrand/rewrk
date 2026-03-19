@@ -41,6 +41,7 @@ impl CliCollector {
     }
 
     /// The aggregated write transfer rate histogram.
+    #[allow(dead_code)] // Will be used when write transfer display is added
     pub fn write_transfer(&self) -> &Histogram<u32> {
         &self.write_transfer
     }
@@ -56,6 +57,7 @@ impl CliCollector {
     }
 
     /// Number of samples processed.
+    #[allow(dead_code)] // Available for debugging
     pub fn sample_count(&self) -> usize {
         self.sample_count
     }
