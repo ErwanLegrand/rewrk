@@ -76,10 +76,10 @@
     - [x] Write tests for human-readable output formatting
     - [x] Write tests for JSON output schema correctness
     - [x] Write tests for percentile table generation
-- [ ] Task: Add integration tests for multi-worker benchmarks
-    - [ ] Write test for multi-threaded benchmark with >1 worker
-    - [ ] Write test for multi-connection concurrency per worker
-    - [ ] Write test for benchmark with custom producer and collector
+- [x] Task: Add integration tests for multi-worker benchmarks [d40d299]
+    - [x] Write test for multi-threaded benchmark with >1 worker
+    - [x] Write test for multi-connection concurrency per worker
+    - [x] Write test for benchmark with custom producer and collector
 - [ ] Task: Verify >80% test coverage and fix gaps
     - [ ] Run coverage report
     - [ ] Identify remaining uncovered paths
