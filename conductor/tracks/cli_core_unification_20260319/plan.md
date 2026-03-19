@@ -2,11 +2,11 @@
 
 ## Phase 1: Build CLI Producer and Collector
 
-- [ ] Task: Implement CliProducer wrapping CLI flags into rewrk-core Producer trait
-    - [ ] Write tests for CliProducer batch generation from CLI settings
-    - [ ] Create `src/cli_producer.rs` implementing `rewrk_core::Producer`
-    - [ ] Handle --method, --header, --body, --rounds, --duration flags
-    - [ ] Verify tests pass
+- [x] Task: Implement CliProducer wrapping CLI flags into rewrk-core Producer trait [aff185d]
+    - [x] Write tests for CliProducer batch generation from CLI settings
+    - [x] Create `src/cli_producer.rs` implementing `rewrk_core::Producer`
+    - [x] Handle --method, --header, --body, --rounds, --duration flags
+    - [x] Verify tests pass
 - [ ] Task: Implement CliCollector wrapping Sample aggregation into SampleCollector
     - [ ] Write tests for CliCollector merging multiple Samples
     - [ ] Create `src/cli_collector.rs` implementing `rewrk_core::SampleCollector`
