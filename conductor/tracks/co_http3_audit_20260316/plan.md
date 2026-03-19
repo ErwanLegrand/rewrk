@@ -68,10 +68,10 @@
 
 ## Phase 4: Test Coverage & Final Hardening
 
-- [ ] Task: Add unit tests for latency recording and sample aggregation
-    - [ ] Write tests for `Sample` creation, merging, and histogram operations
-    - [ ] Write tests for IO usage tracking accuracy
-    - [ ] Write tests for error classification and counting
+- [x] Task: Add unit tests for latency recording and sample aggregation [ebb1886]
+    - [x] Write tests for `Sample` creation, merging, and histogram operations
+    - [x] Write tests for IO usage tracking accuracy
+    - [x] Write tests for error classification and counting
 - [ ] Task: Add unit tests for CLI result formatting
     - [ ] Write tests for human-readable output formatting
     - [ ] Write tests for JSON output schema correctness
