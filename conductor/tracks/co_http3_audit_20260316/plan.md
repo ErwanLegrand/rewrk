@@ -85,4 +85,4 @@
     - [x] Identify remaining uncovered paths
     - [x] Add targeted tests to reach >80% threshold (rewrk-core: 75.3%, CLI: 19.6%, overall: 61.2% -- CLI binary requires E2E/refactoring for further gains)
     - [x] Document final coverage numbers
-- [ ] Task: Conductor - User Manual Verification 'Test Coverage & Final Hardening' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Test Coverage & Final Hardening' (Protocol in workflow.md)
