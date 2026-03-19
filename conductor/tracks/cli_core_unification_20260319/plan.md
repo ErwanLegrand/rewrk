@@ -7,12 +7,12 @@
     - [x] Create `src/cli_producer.rs` implementing `rewrk_core::Producer`
     - [x] Handle --method, --header, --body, --rounds, --duration flags
     - [x] Verify tests pass
-- [ ] Task: Implement CliCollector wrapping Sample aggregation into SampleCollector
-    - [ ] Write tests for CliCollector merging multiple Samples
-    - [ ] Create `src/cli_collector.rs` implementing `rewrk_core::SampleCollector`
-    - [ ] Aggregate histograms (latency, corrected_latency, read/write transfer) across samples
-    - [ ] Track error counts from samples
-    - [ ] Verify tests pass
+- [x] Task: Implement CliCollector wrapping Sample aggregation into SampleCollector [6cd6f06]
+    - [x] Write tests for CliCollector merging multiple Samples
+    - [x] Create `src/cli_collector.rs` implementing `rewrk_core::SampleCollector`
+    - [x] Aggregate histograms (latency, corrected_latency, read/write transfer) across samples
+    - [x] Track error counts from samples
+    - [x] Verify tests pass
 - [ ] Task: Conductor - User Manual Verification 'Build CLI Producer and Collector' (Protocol in workflow.md)
 
 ## Phase 2: Migrate bench.rs to rewrk-core Engine
