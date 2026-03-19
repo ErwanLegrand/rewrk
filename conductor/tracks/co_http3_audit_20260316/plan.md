@@ -72,10 +72,10 @@
     - [x] Write tests for `Sample` creation, merging, and histogram operations
     - [x] Write tests for IO usage tracking accuracy
     - [x] Write tests for error classification and counting
-- [ ] Task: Add unit tests for CLI result formatting
-    - [ ] Write tests for human-readable output formatting
-    - [ ] Write tests for JSON output schema correctness
-    - [ ] Write tests for percentile table generation
+- [x] Task: Add unit tests for CLI result formatting [39c9546]
+    - [x] Write tests for human-readable output formatting
+    - [x] Write tests for JSON output schema correctness
+    - [x] Write tests for percentile table generation
 - [ ] Task: Add integration tests for multi-worker benchmarks
     - [ ] Write test for multi-threaded benchmark with >1 worker
     - [ ] Write test for multi-connection concurrency per worker
