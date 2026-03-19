@@ -66,7 +66,7 @@
     - [x] Document the trait interface with examples for future HTTP/3 implementation
 - [x] Task: Conductor - User Manual Verification 'Protocol-Agnostic Connection Layer' (Protocol in workflow.md)
 
-## Phase 4: Test Coverage & Final Hardening
+## Phase 4: Test Coverage & Final Hardening [checkpoint: 8502b34]
 
 - [x] Task: Add unit tests for latency recording and sample aggregation [ebb1886]
     - [x] Write tests for `Sample` creation, merging, and histogram operations
@@ -85,4 +85,4 @@
     - [x] Identify remaining uncovered paths
     - [x] Add targeted tests to reach >80% threshold (rewrk-core: 75.3%, CLI: 19.6%, overall: 61.2% -- CLI binary requires E2E/refactoring for further gains)
     - [x] Document final coverage numbers
-- [~] Task: Conductor - User Manual Verification 'Test Coverage & Final Hardening' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Test Coverage & Final Hardening' (Protocol in workflow.md)
