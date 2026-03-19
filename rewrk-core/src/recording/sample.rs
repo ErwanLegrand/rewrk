@@ -203,7 +203,7 @@ impl Sample {
 
 #[inline]
 fn calculate_rate(start: u64, stop: u64, dur: Duration) -> u64 {
-    ((stop - start) as f64 / dur.as_secs_f64()).round() as u64
+    (stop.saturating_sub(start) as f64 / dur.as_secs_f64()).round() as u64
 }
 
 #[cfg(test)]

@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::collections::HashMap;
 
 use colored::Colorize;
@@ -113,17 +111,6 @@ pub struct WorkerResult {
 }
 
 impl WorkerResult {
-    /// Creates a empty result, useful for merging results into one
-    /// consumer.
-    pub fn default() -> Self {
-        Self {
-            total_times: vec![],
-            request_times: vec![],
-            buffer_sizes: vec![],
-            error_map: HashMap::new(),
-        }
-    }
-
     /// Consumes both self and other producing a combined result.
     pub fn combine(mut self, other: Self) -> Self {
         self.request_times.extend(other.request_times);
@@ -442,8 +429,6 @@ impl WorkerResult {
     pub fn display_json(&self, co_correction: bool) {
         // prevent div-by-zero panics
         if self.total_requests() == 0 {
-            let null = None::<()>;
-
             let mut out = json!({
                 "latency_avg": null,
                 "latency_max": null,
@@ -824,8 +809,7 @@ mod tests {
     #[test]
     fn test_json_zero_requests_outputs_null_latencies() {
         // Replicate the zero-request JSON logic from display_json
-        let null = None::<()>;
-        let out = json!({
+                let out = json!({
             "latency_avg": null,
             "latency_max": null,
             "latency_min": null,

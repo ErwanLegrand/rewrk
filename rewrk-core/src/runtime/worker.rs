@@ -342,6 +342,11 @@ pub struct WorkerConnection<Conn: ProtocolConnection> {
     /// Tracks the expected inter-request interval for Coordinated
     /// Omission correction, based on the running average of observed
     /// successful request latencies.
+    ///
+    /// **Bootstrap gap:** The first successful request on each connection
+    /// is recorded only into the uncorrected histogram because no expected
+    /// interval is available yet. This is expected behaviour — one sample
+    /// per connection is negligible relative to a typical benchmark run.
     expected_interval: ExpectedIntervalTracker,
 }
 

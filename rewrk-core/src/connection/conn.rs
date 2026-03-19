@@ -42,12 +42,12 @@ pub enum ReWrkConnector {
 }
 
 impl ReWrkConnector {
-    /// Create a connector for the given protocol.
+    /// Wrap an [`Http1Connector`] in the enum dispatcher.
     pub fn http1(connector: Http1Connector) -> Self {
         Self::Http1(connector)
     }
 
-    /// Create a connector for the given protocol.
+    /// Wrap an [`Http2Connector`] in the enum dispatcher.
     pub fn http2(connector: Http2Connector) -> Self {
         Self::Http2(connector)
     }
