@@ -18,4 +18,4 @@
     - [x] Verify create_connector already validates URI (it does via Error::MissingScheme/MissingHost)
     - [x] Ensure ReWrkConnector::http1/http2 pass-through works with updated constructors
     - [x] Run cargo clippy --all and verify zero warnings
-- [ ] Task: Conductor - User Manual Verification 'Refactor Connection Types' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Refactor Connection Types' (Protocol in workflow.md)
