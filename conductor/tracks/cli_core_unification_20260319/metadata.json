@@ -1,0 +1,8 @@
+{
+  "track_id": "cli_core_unification_20260319",
+  "type": "refactor",
+  "status": "new",
+  "created_at": "2026-03-19T10:00:00Z",
+  "updated_at": "2026-03-19T10:00:00Z",
+  "description": "Migrate CLI binary to use rewrk-core benchmarking engine, eliminating dual CO-correction paths and dead code"
+}

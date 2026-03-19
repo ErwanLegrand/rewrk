@@ -6,3 +6,13 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Audit rewrk for measurement accuracy (CO mitigation) and architect connection layer for HTTP/3 readiness
 *Link: [./conductor/tracks/co_http3_audit_20260316/](./conductor/tracks/co_http3_audit_20260316/)*
+
+---
+
+## [ ] Track: Eliminate unwrap() panics in hot-path execute_req
+*Link: [./conductor/tracks/hotpath_safety_20260319/](./conductor/tracks/hotpath_safety_20260319/)*
+
+---
+
+## [ ] Track: Unify CLI onto rewrk-core benchmarking engine
+*Link: [./conductor/tracks/cli_core_unification_20260319/](./conductor/tracks/cli_core_unification_20260319/)*
