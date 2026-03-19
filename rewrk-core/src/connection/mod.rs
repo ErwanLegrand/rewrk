@@ -47,3 +47,28 @@ impl Scheme {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_http_protocol_is_http1() {
+        let proto = HttpProtocol::HTTP1;
+        assert!(proto.is_http1());
+        assert!(!proto.is_http2());
+    }
+
+    #[test]
+    fn test_http_protocol_is_http2() {
+        let proto = HttpProtocol::HTTP2;
+        assert!(proto.is_http2());
+        assert!(!proto.is_http1());
+    }
+
+    #[test]
+    fn test_scheme_default_port_http() {
+        let scheme = Scheme::Http;
+        assert_eq!(scheme.default_port(), 80);
+    }
+}

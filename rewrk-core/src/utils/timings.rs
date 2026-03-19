@@ -37,3 +37,62 @@ impl FromIterator<Self> for RuntimeTimings {
         total
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_is_zero() {
+        let t = RuntimeTimings::default();
+        assert_eq!(t.producer_wait_runtime, Duration::ZERO);
+        assert_eq!(t.execute_wait_runtime, Duration::ZERO);
+    }
+
+    #[test]
+    fn test_add_assign() {
+        let mut a = RuntimeTimings {
+            producer_wait_runtime: Duration::from_millis(10),
+            execute_wait_runtime: Duration::from_millis(20),
+        };
+        let b = RuntimeTimings {
+            producer_wait_runtime: Duration::from_millis(5),
+            execute_wait_runtime: Duration::from_millis(15),
+        };
+        a += b;
+        assert_eq!(a.producer_wait_runtime, Duration::from_millis(15));
+        assert_eq!(a.execute_wait_runtime, Duration::from_millis(35));
+    }
+
+    #[test]
+    fn test_add() {
+        let a = RuntimeTimings {
+            producer_wait_runtime: Duration::from_millis(10),
+            execute_wait_runtime: Duration::from_millis(20),
+        };
+        let b = RuntimeTimings {
+            producer_wait_runtime: Duration::from_millis(5),
+            execute_wait_runtime: Duration::from_millis(15),
+        };
+        let c = a + b;
+        assert_eq!(c.producer_wait_runtime, Duration::from_millis(15));
+        assert_eq!(c.execute_wait_runtime, Duration::from_millis(35));
+    }
+
+    #[test]
+    fn test_from_iterator() {
+        let timings = vec![
+            RuntimeTimings {
+                producer_wait_runtime: Duration::from_millis(10),
+                execute_wait_runtime: Duration::from_millis(5),
+            },
+            RuntimeTimings {
+                producer_wait_runtime: Duration::from_millis(20),
+                execute_wait_runtime: Duration::from_millis(10),
+            },
+        ];
+        let total: RuntimeTimings = timings.into_iter().collect();
+        assert_eq!(total.producer_wait_runtime, Duration::from_millis(30));
+        assert_eq!(total.execute_wait_runtime, Duration::from_millis(15));
+    }
+}

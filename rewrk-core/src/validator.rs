@@ -76,3 +76,48 @@ impl ResponseValidator for DefaultValidator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::{Response, StatusCode};
+
+    fn parts_with_status(status: StatusCode) -> Parts {
+        let (parts, _body) = Response::builder()
+            .status(status)
+            .body(())
+            .unwrap()
+            .into_parts();
+        parts
+    }
+
+    #[test]
+    fn test_default_validator_accepts_200() {
+        let validator = DefaultValidator;
+        let parts = parts_with_status(StatusCode::OK);
+        let result = validator.validate(parts, Bytes::new());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_default_validator_rejects_500() {
+        let validator = DefaultValidator;
+        let parts = parts_with_status(StatusCode::INTERNAL_SERVER_ERROR);
+        let result = validator.validate(parts, Bytes::new());
+        match result {
+            Err(ValidationError::InvalidStatus(code)) => assert_eq!(code, 500),
+            other => panic!("Expected InvalidStatus(500), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_default_validator_rejects_404() {
+        let validator = DefaultValidator;
+        let parts = parts_with_status(StatusCode::NOT_FOUND);
+        let result = validator.validate(parts, Bytes::new());
+        match result {
+            Err(ValidationError::InvalidStatus(code)) => assert_eq!(code, 404),
+            other => panic!("Expected InvalidStatus(404), got {:?}", other),
+        }
+    }
+}
