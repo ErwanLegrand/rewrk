@@ -13,7 +13,7 @@
     - [x] Aggregate histograms (latency, corrected_latency, read/write transfer) across samples
     - [x] Track error counts from samples
     - [x] Verify tests pass
-- [ ] Task: Conductor - User Manual Verification 'Build CLI Producer and Collector' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Build CLI Producer and Collector' (Protocol in workflow.md)
 
 ## Phase 2: Migrate bench.rs to rewrk-core Engine
 
