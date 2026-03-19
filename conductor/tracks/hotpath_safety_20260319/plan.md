@@ -1,6 +1,6 @@
 # Plan: Hot-Path Safety — Eliminate `unwrap()` in `execute_req`
 
-## Phase 1: Refactor Connection Types
+## Phase 1: Refactor Connection Types [checkpoint: 0c33a15]
 
 - [x] Task: Add URI validation to Http1Connector and Http2Connector constructors [3c07c86]
     - [x] Write tests that Http1Connector::new rejects a URI without scheme
@@ -18,4 +18,4 @@
     - [x] Verify create_connector already validates URI (it does via Error::MissingScheme/MissingHost)
     - [x] Ensure ReWrkConnector::http1/http2 pass-through works with updated constructors
     - [x] Run cargo clippy --all and verify zero warnings
-- [~] Task: Conductor - User Manual Verification 'Refactor Connection Types' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Refactor Connection Types' (Protocol in workflow.md)
