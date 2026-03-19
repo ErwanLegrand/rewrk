@@ -1,6 +1,6 @@
 # Plan: Unify CLI onto `rewrk-core` Benchmarking Engine
 
-## Phase 1: Build CLI Producer and Collector
+## Phase 1: Build CLI Producer and Collector [checkpoint: d17ee25]
 
 - [x] Task: Implement CliProducer wrapping CLI flags into rewrk-core Producer trait [aff185d]
     - [x] Write tests for CliProducer batch generation from CLI settings
@@ -13,7 +13,7 @@
     - [x] Aggregate histograms (latency, corrected_latency, read/write transfer) across samples
     - [x] Track error counts from samples
     - [x] Verify tests pass
-- [~] Task: Conductor - User Manual Verification 'Build CLI Producer and Collector' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Build CLI Producer and Collector' (Protocol in workflow.md)
 
 ## Phase 2: Migrate bench.rs to rewrk-core Engine
 
