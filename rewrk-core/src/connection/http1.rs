@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 
 use async_trait::async_trait;
 use http::response::Parts;
+use http::uri::{Authority, Scheme as HttpScheme};
 use http::{header, HeaderValue, Request, Uri};
 use hyper::body::Bytes;
 use hyper::client::conn;
@@ -28,7 +29,8 @@ pub struct Http1Connector {
     addr: SocketAddr,
     scheme: Scheme,
     host: String,
-    uri: Uri,
+    uri_scheme: HttpScheme,
+    uri_authority: Authority,
     host_header: HeaderValue,
 }
 
@@ -40,8 +42,12 @@ impl Http1Connector {
     /// * `addr` - The resolved socket address to connect to.
     /// * `scheme` - Whether to use plain HTTP or HTTPS (with TLS connector).
     /// * `host` - The hostname used for TLS SNI.
-    /// * `uri` - The base URI (scheme + authority) for requests.
+    /// * `uri` - The base URI (scheme + authority) for requests. Must have both scheme and authority.
     /// * `host_header` - The value to set in the `Host` header on each request.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `uri` is missing a scheme or authority.
     pub fn new(
         addr: SocketAddr,
         scheme: Scheme,
@@ -49,11 +55,14 @@ impl Http1Connector {
         uri: Uri,
         host_header: HeaderValue,
     ) -> Self {
+        let uri_scheme = uri.scheme().expect("URI must have a scheme").clone();
+        let uri_authority = uri.authority().expect("URI must have an authority").clone();
         Self {
             addr,
             scheme,
             host: host.into(),
-            uri,
+            uri_scheme,
+            uri_authority,
             host_header,
         }
     }
@@ -80,7 +89,8 @@ impl ProtocolConnector for Http1Connector {
         };
 
         Ok(Http1Connection {
-            uri: self.uri.clone(),
+            uri_scheme: self.uri_scheme.clone(),
+            uri_authority: self.uri_authority.clone(),
             host_header: self.host_header.clone(),
             stream,
             io_tracker: usage_tracker,
@@ -90,7 +100,8 @@ impl ProtocolConnector for Http1Connector {
 
 /// An established HTTP/1.1 connection that can execute requests.
 pub struct Http1Connection {
-    uri: Uri,
+    uri_scheme: HttpScheme,
+    uri_authority: Authority,
     host_header: HeaderValue,
     stream: HttpStream,
     io_tracker: IoUsageTracker,
@@ -105,12 +116,12 @@ impl ProtocolConnection for Http1Connection {
     ) -> Result<(Parts, Bytes), hyper::Error> {
         let request_uri = request.uri();
         let mut builder = Uri::builder()
-            .scheme(self.uri.scheme().unwrap().clone())
-            .authority(self.uri.authority().unwrap().clone());
+            .scheme(self.uri_scheme.clone())
+            .authority(self.uri_authority.clone());
         if let Some(path) = request_uri.path_and_query() {
             builder = builder.path_and_query(path.clone());
         }
-        (*request.uri_mut()) = builder.build().unwrap();
+        *request.uri_mut() = builder.build().expect("pre-validated URI components");
         request
             .headers_mut()
             .insert(header::HOST, self.host_header.clone());
@@ -303,5 +314,31 @@ mod tests {
         let (parts, body) = handle.await.unwrap();
         assert_eq!(parts.status, http::StatusCode::OK);
         assert_eq!(body.as_ref(), b"Hello, Http1!");
+    }
+
+    /// A relative URI (no scheme, no authority) must panic with the scheme message,
+    /// since scheme is checked before authority.
+    #[test]
+    #[should_panic(expected = "URI must have a scheme")]
+    fn new_panics_when_uri_missing_scheme() {
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let uri: Uri = "/path".parse().unwrap();
+        let host_header = HeaderValue::from_static("127.0.0.1:8080");
+        Http1Connector::new(addr, Scheme::Http, "127.0.0.1", uri, host_header);
+    }
+
+    /// A URI with only an authority and no scheme must panic with the scheme message.
+    /// The http crate does not allow constructing a valid Uri with Some(scheme) but None
+    /// authority through safe APIs (from_parts rejects scheme-without-authority), so the
+    /// authority check is a secondary defensive guard. This test verifies the combined
+    /// validation rejects URIs that lack scheme+authority.
+    #[test]
+    #[should_panic(expected = "URI must have a scheme")]
+    fn new_panics_when_uri_missing_scheme_and_authority() {
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        // Authority-only reference — no scheme, no path.
+        let uri: Uri = "//127.0.0.1:8080".parse().unwrap();
+        let host_header = HeaderValue::from_static("127.0.0.1:8080");
+        Http1Connector::new(addr, Scheme::Http, "127.0.0.1", uri, host_header);
     }
 }
