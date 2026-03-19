@@ -11,6 +11,7 @@ use regex::Regex;
 use tokio::time::Duration;
 
 mod bench;
+mod cli_producer;
 mod http;
 mod results;
 mod runtime;
