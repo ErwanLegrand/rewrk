@@ -34,15 +34,11 @@ impl ExpectedIntervalTracker {
     /// if no requests have been observed yet.
     #[inline]
     pub fn expected_interval_us(&self) -> Option<u64> {
-        if self.request_count == 0 {
-            None
-        } else {
-            Some(self.total_latency_us / self.request_count)
-        }
+        self.total_latency_us.checked_div(self.request_count)
     }
 
     /// Return the number of requests observed so far.
-    #[inline]
+    #[cfg(test)]
     pub fn request_count(&self) -> u64 {
         self.request_count
     }
