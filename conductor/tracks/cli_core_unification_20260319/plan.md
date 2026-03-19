@@ -17,17 +17,17 @@
 
 ## Phase 2: Migrate bench.rs to rewrk-core Engine
 
-- [ ] Task: Replace http::start_tasks with ReWrkBenchmark in bench.rs
-    - [ ] Write integration test: CLI benchmark with CliProducer + CliCollector produces expected output
-    - [ ] Rewrite `bench.rs::run()` to use `ReWrkBenchmark::create_with_tls()`
-    - [ ] Wire CliProducer and CliCollector
-    - [ ] Verify benchmark runs end-to-end
-- [ ] Task: Rewrite results display to use Sample histograms
-    - [ ] Write tests for latency display from Sample histograms (uncorrected + corrected)
-    - [ ] Write tests for JSON output from Sample histograms
-    - [ ] Refactor `results.rs` to accept aggregated histograms instead of raw Vec<Duration>
-    - [ ] Remove `build_corrected_stats`, `WorkerResult`, and raw duration collection
-    - [ ] Verify --pct, --json, and default output formats match previous behavior
+- [x] Task: Replace http::start_tasks with ReWrkBenchmark in bench.rs [4d8b164]
+    - [x] Write integration test: CLI benchmark with CliProducer + CliCollector produces expected output
+    - [x] Rewrite `bench.rs::run()` to use `ReWrkBenchmark::create_with_tls()`
+    - [x] Wire CliProducer and CliCollector
+    - [x] Verify benchmark runs end-to-end
+- [x] Task: Rewrite results display to use Sample histograms [4d8b164]
+    - [x] Write tests for latency display from Sample histograms (uncorrected + corrected)
+    - [x] Write tests for JSON output from Sample histograms
+    - [x] Refactor `results.rs` to accept aggregated histograms instead of raw Vec<Duration>
+    - [x] Remove `build_corrected_stats`, `WorkerResult`, and raw duration collection
+    - [x] Verify --pct, --json, and default output formats match previous behavior
 - [ ] Task: Conductor - User Manual Verification 'Migrate bench.rs to rewrk-core Engine' (Protocol in workflow.md)
 
 ## Phase 3: Cleanup and Hardening
