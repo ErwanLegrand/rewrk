@@ -11,7 +11,9 @@ use regex::Regex;
 use tokio::time::Duration;
 
 mod bench;
+#[allow(dead_code)] // TODO: wire into bench.rs in Phase 2
 mod cli_collector;
+#[allow(dead_code)] // TODO: wire into bench.rs in Phase 2
 mod cli_producer;
 mod http;
 mod results;
