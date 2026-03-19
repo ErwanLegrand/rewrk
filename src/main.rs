@@ -11,16 +11,14 @@ use regex::Regex;
 use tokio::time::Duration;
 
 mod bench;
-#[allow(dead_code)] // TODO: wire into bench.rs in Phase 2
 mod cli_collector;
-#[allow(dead_code)] // TODO: wire into bench.rs in Phase 2
 mod cli_producer;
 mod http;
 mod results;
 mod runtime;
 mod utils;
 
-use crate::http::BenchType;
+use rewrk_core::HttpProtocol;
 
 /// Matches a string like '12d 24h 5m 45s' to a regex capture.
 static DURATION_MATCH: &str =
@@ -70,10 +68,10 @@ fn main() {
     let http2: bool = args.is_present("http2");
     let json: bool = args.is_present("json");
 
-    let bench_type = if http2 {
-        BenchType::HTTP2
+    let protocol = if http2 {
+        HttpProtocol::HTTP2
     } else {
-        BenchType::HTTP1
+        HttpProtocol::HTTP1
     };
 
     let duration: &str = args.value_of("duration").unwrap_or("1s");
@@ -132,7 +130,7 @@ fn main() {
         threads,
         connections: conns,
         host: host.to_string(),
-        bench_type,
+        protocol,
         duration,
         display_percentile: pct,
         display_json: json,

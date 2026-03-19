@@ -1,15 +1,17 @@
 use std::fmt::Display;
 use std::time::Duration;
 
-use ::http::{HeaderMap, Method};
+use ::http::{HeaderMap, Method, Uri};
 use anyhow::{anyhow, Result};
 use colored::*;
-use futures_util::StreamExt;
 use hyper::body::Bytes;
+use rewrk_core::{HttpProtocol, ReWrkBenchmark};
 
-use crate::results::WorkerResult;
+use crate::cli_collector::CliCollector;
+use crate::cli_producer::CliProducer;
+use crate::results;
+use crate::runtime;
 use crate::utils::div_mod;
-use crate::{http, runtime};
 
 /// The customisable settings that build the benchmark's behaviour.
 #[derive(Clone, Debug)]
@@ -24,8 +26,8 @@ pub struct BenchmarkSettings {
     /// The host connection / url.
     pub host: String,
 
-    /// The bench mark type e.g. http1 only.
-    pub bench_type: http::BenchType,
+    /// The HTTP protocol to use (HTTP/1 or HTTP/2).
+    pub protocol: HttpProtocol,
 
     /// The duration of the benchmark.
     pub duration: Duration,
@@ -79,35 +81,54 @@ pub fn start_benchmark(settings: BenchmarkSettings) {
     }
 }
 
-/// Controls the benchmark itself.
+/// Controls the benchmark itself using the rewrk-core engine.
 ///
-/// A pool is created with a set of options that then wait for the
-/// channels to be filled with requests.
+/// A `ReWrkBenchmark` is created with a `CliProducer` that generates
+/// request batches and a `CliCollector` that aggregates Sample histograms.
 ///
-/// Once the duration has elapsed the handles are awaited and the results
-/// extracted from the handle.
-///
-/// The results are then merged into a single set of averages across workers.
+/// Once the benchmark completes the collector's aggregated histograms
+/// are used to display results.
 async fn run(settings: BenchmarkSettings) -> Result<()> {
-    let predict_size = settings.duration.as_secs() * 10_000;
+    // Parse URI
+    let uri: Uri = settings
+        .host
+        .trim()
+        .parse()
+        .map_err(|e| anyhow!("error parsing uri: {}", e))?;
 
-    let handles = http::start_tasks(
+    // Build producer with path-only URI
+    let path = uri
+        .path_and_query()
+        .map(|pq| pq.as_str())
+        .unwrap_or("/");
+    let path_uri: Uri = path.parse()?;
+
+    let producer = CliProducer::new(
+        path_uri,
+        settings.method.clone(),
+        settings.headers.clone(),
+        settings.body.clone(),
         settings.duration,
+    );
+
+    let collector = CliCollector::new();
+
+    // Create benchmark using rewrk-core
+    let mut benchmarker = ReWrkBenchmark::create_with_tls(
+        uri,
         settings.connections,
-        settings.host.trim().to_string(),
-        settings.bench_type,
-        settings.method,
-        settings.headers,
-        settings.body,
-        predict_size as usize,
+        settings.protocol,
+        producer,
+        collector,
         settings.insecure,
     )
-    .await;
+    .await
+    .map_err(|e| anyhow!("benchmark setup error: {}", e))?;
 
-    let mut handles = match handles {
-        Ok(v) => v,
-        Err(e) => return Err(anyhow!("error parsing uri: {}", e)),
-    };
+    benchmarker.set_num_workers(settings.threads);
+    // Use a sample window larger than the duration so all data
+    // lands in a single sample for accurate aggregation.
+    benchmarker.set_sample_window(settings.duration + Duration::from_secs(60));
 
     if !settings.display_json {
         println!(
@@ -118,41 +139,11 @@ async fn run(settings: BenchmarkSettings) -> Result<()> {
         );
     }
 
-    let mut combiner = WorkerResult::default();
-    while let Some(result) = handles.next().await {
-        match result.unwrap() {
-            Ok(stats) => combiner = combiner.combine(stats),
-            Err(e) => return Err(anyhow!("connection error: {}", e)),
-        }
-    }
+    benchmarker.run().await;
+    let collector = benchmarker.consume_collector().await;
 
-    if settings.display_json {
-        combiner.display_json(settings.co_correction);
-        return Ok(());
-    }
-
-    // prevent div-by-zero panics
-    if combiner.total_requests() == 0 {
-        println!("No requests completed successfully");
-        return Ok(());
-    }
-
-    combiner.display_latencies();
-    if settings.co_correction {
-        combiner.display_latencies_corrected();
-    }
-    combiner.display_requests();
-    combiner.display_transfer();
-
-    if settings.display_percentile {
-        combiner.display_percentile_table();
-        if settings.co_correction {
-            combiner.display_percentile_table_corrected();
-        }
-    }
-
-    // Display errors last.
-    combiner.display_errors();
+    // Display results from aggregated histograms
+    results::display_results(&collector, &settings);
 
     Ok(())
 }

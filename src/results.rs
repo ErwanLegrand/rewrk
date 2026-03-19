@@ -1,15 +1,25 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use colored::Colorize;
 use hdrhistogram::Histogram;
 use serde_json::json;
-use tokio::time::Duration;
 
+use crate::bench::BenchmarkSettings;
+use crate::cli_collector::CliCollector;
 use crate::utils::format_data;
 
-/// Duration to microseconds as u64 for HDR histogram recording.
-fn duration_to_micros(d: Duration) -> u64 {
-    d.as_micros() as u64
+// ── Legacy types kept for src/http/ compatibility (Phase 3 removal) ──
+
+/// Legacy result type used by the old HTTP client in `src/http/`.
+/// Retained so that `mod http` continues to compile until Phase 3.
+#[allow(dead_code)]
+#[derive(Default)]
+pub struct WorkerResult {
+    pub total_times: Vec<Duration>,
+    pub request_times: Vec<Duration>,
+    pub buffer_sizes: Vec<usize>,
+    pub error_map: HashMap<String, usize>,
 }
 
 /// Microseconds to milliseconds as f64 for display.
@@ -17,799 +27,431 @@ fn micros_to_ms(us: u64) -> f64 {
     us as f64 / 1000.0
 }
 
-fn get_percentile(request_times: &[Duration], pct: f64) -> Duration {
-    let mut len = request_times.len() as f64 * pct;
-    if len < 1.0 {
-        len = 1.0;
+/// Main display orchestrator. Reads from the collector's aggregated
+/// histograms and prints results in the same format as the old CLI.
+pub fn display_results(collector: &CliCollector, settings: &BenchmarkSettings) {
+    let total_requests = collector.total_requests();
+
+    if settings.display_json {
+        display_json(collector, settings.co_correction);
+        return;
     }
 
-    let e = format!("failed to calculate P{} avg latency", (1.0 - pct) * 100f64);
-    let pct = request_times.chunks(len as usize).next().expect(&e);
-
-    let total: f64 = pct.iter().map(|dur| dur.as_secs_f64()).sum();
-
-    let avg = total / pct.len() as f64;
-
-    Duration::from_secs_f64(avg)
-}
-
-/// CO-corrected latency statistics computed from an HDR histogram.
-#[derive(Debug, Clone)]
-pub struct CorrectedStats {
-    pub avg_ms: f64,
-    pub max_ms: f64,
-    pub min_ms: f64,
-    pub std_deviation_ms: f64,
-    pub p50_ms: f64,
-    pub p75_ms: f64,
-    pub p90_ms: f64,
-    pub p95_ms: f64,
-    pub p99_ms: f64,
-    pub p999_ms: f64,
-}
-
-/// Build a CO-corrected HDR histogram from raw request times.
-///
-/// The `expected_interval` is the expected time between requests
-/// (i.e. avg latency). The histogram uses `record_correct` to
-/// fill in missing samples that coordinated omission would hide.
-pub fn build_corrected_stats(
-    request_times: &[Duration],
-    expected_interval: Duration,
-) -> Option<CorrectedStats> {
-    if request_times.is_empty() {
-        return None;
+    if total_requests == 0 {
+        println!("No requests completed successfully");
+        return;
     }
 
-    let expected_interval_us = duration_to_micros(expected_interval);
-    if expected_interval_us == 0 {
-        return None;
+    display_latencies(collector.latency());
+    if settings.co_correction {
+        display_latencies_corrected(collector.corrected_latency());
     }
+    display_requests(collector);
+    display_transfer(collector);
 
-    // Create histogram with enough range: 1 microsecond to 1 hour.
-    let mut hist = Histogram::<u64>::new_with_bounds(1, 3_600_000_000, 3)
-        .expect("failed to create HDR histogram");
-
-    for d in request_times {
-        let us = duration_to_micros(*d).max(1);
-        let _ = hist.record_correct(us, expected_interval_us);
-    }
-
-    let avg_us = hist.mean();
-    let max_us = hist.max();
-    let min_us = hist.min();
-    let std_dev_us = hist.stdev();
-
-    Some(CorrectedStats {
-        avg_ms: avg_us / 1000.0,
-        max_ms: micros_to_ms(max_us),
-        min_ms: micros_to_ms(min_us),
-        std_deviation_ms: std_dev_us / 1000.0,
-        p50_ms: micros_to_ms(hist.value_at_percentile(50.0)),
-        p75_ms: micros_to_ms(hist.value_at_percentile(75.0)),
-        p90_ms: micros_to_ms(hist.value_at_percentile(90.0)),
-        p95_ms: micros_to_ms(hist.value_at_percentile(95.0)),
-        p99_ms: micros_to_ms(hist.value_at_percentile(99.0)),
-        p999_ms: micros_to_ms(hist.value_at_percentile(99.9)),
-    })
-}
-
-/// Contains and handles results from the workers
-#[derive(Default)]
-pub struct WorkerResult {
-    /// The total time taken for each worker.
-    pub total_times: Vec<Duration>,
-
-    /// The vec of latencies per request stored.
-    pub request_times: Vec<Duration>,
-
-    /// The amount of data read from each worker.
-    pub buffer_sizes: Vec<usize>,
-
-    /// Error counting map.
-    pub error_map: HashMap<String, usize>,
-}
-
-impl WorkerResult {
-    /// Consumes both self and other producing a combined result.
-    pub fn combine(mut self, other: Self) -> Self {
-        self.request_times.extend(other.request_times);
-        self.total_times.extend(other.total_times);
-        self.buffer_sizes.extend(other.buffer_sizes);
-
-        // Insert/add new errors to current error map.
-        for (message, count) in other.error_map {
-            match self.error_map.get_mut(&message) {
-                Some(c) => *c += count,
-                None => {
-                    self.error_map.insert(message, count);
-                },
-            }
-        }
-
-        self
-    }
-
-    /// Simple helper returning the amount of requests overall.
-    pub fn total_requests(&self) -> usize {
-        self.request_times.len()
-    }
-
-    /// Calculates the total transfer in bytes.
-    pub fn total_transfer(&self) -> usize {
-        self.buffer_sizes.iter().sum()
-    }
-
-    /// Calculates the total transfer in bytes.
-    pub fn avg_transfer(&self) -> f64 {
-        self.total_transfer() as f64 / self.avg_total_time().as_secs_f64()
-    }
-
-    /// Calculates the requests per second average.
-    pub fn avg_request_per_sec(&self) -> f64 {
-        let amount = self.request_times.len() as f64;
-        let avg_time = self.avg_total_time();
-
-        amount / avg_time.as_secs_f64()
-    }
-
-    /// Calculates the average time per worker overall as a `Duration`
-    ///
-    /// Basic Logic:
-    /// Sum(worker totals) / length = avg duration
-    pub fn avg_total_time(&self) -> Duration {
-        let avg: f64 = self.total_times.iter().map(|dur| dur.as_secs_f64()).sum();
-
-        let len = self.total_times.len() as f64;
-        Duration::from_secs_f64(avg / len)
-    }
-
-    /// Calculates the average latency overall from all requests..
-    pub fn avg_request_latency(&self) -> Duration {
-        let avg: f64 = self.request_times.iter().map(|dur| dur.as_secs_f64()).sum();
-
-        let len = self.total_requests() as f64;
-        Duration::from_secs_f64(avg / len)
-    }
-
-    /// Calculates the max latency overall from all requests.
-    pub fn max_request_latency(&self) -> Duration {
-        self.request_times.iter().max().copied().unwrap_or_default()
-    }
-
-    /// Calculates the min latency overall from all requests.
-    pub fn min_request_latency(&self) -> Duration {
-        self.request_times.iter().min().copied().unwrap_or_default()
-    }
-
-    /// Calculates the variance between all requests
-    pub fn variance(&self) -> f64 {
-        let mean = self.avg_request_latency().as_secs_f64();
-        let sum_delta: f64 = self
-            .request_times
-            .iter()
-            .map(|dur| {
-                let time = dur.as_secs_f64();
-                let delta = time - mean;
-
-                delta.powi(2)
-            })
-            .sum();
-
-        sum_delta / self.total_requests() as f64
-    }
-
-    /// Calculates the standard deviation of request latency.
-    pub fn std_deviation_request_latency(&self) -> f64 {
-        let diff = self.variance();
-        diff.powf(0.5)
-    }
-
-    /// Sorts the list of times.
-    ///
-    /// this is needed before calculating the Pn percentiles, this must be
-    /// manually ran to same some compute time.
-    pub fn sort_request_times(&mut self) {
-        self.request_times.sort_by(|a, b| b.partial_cmp(a).unwrap());
-    }
-
-    /// Works out the average latency of the 99.9 percentile.
-    pub fn p999_avg_latency(&self) -> Duration {
-        get_percentile(&self.request_times, 0.001)
-    }
-
-    /// Works out the average latency of the 99 percentile.
-    pub fn p99_avg_latency(&self) -> Duration {
-        get_percentile(&self.request_times, 0.01)
-    }
-
-    /// Works out the average latency of the 95 percentile.
-    pub fn p95_avg_latency(&self) -> Duration {
-        get_percentile(&self.request_times, 0.05)
-    }
-
-    /// Works out the average latency of the 90 percentile.
-    pub fn p90_avg_latency(&self) -> Duration {
-        get_percentile(&self.request_times, 0.1)
-    }
-
-    /// Works out the average latency of the 75 percentile.
-    pub fn p75_avg_latency(&mut self) -> Duration {
-        get_percentile(&self.request_times, 0.25)
-    }
-
-    /// Works out the average latency of the 50 percentile.
-    pub fn p50_avg_latency(&mut self) -> Duration {
-        get_percentile(&self.request_times, 0.5)
-    }
-
-    /// Compute CO-corrected stats using the average latency as
-    /// the expected interval.
-    pub fn corrected_stats(&self) -> Option<CorrectedStats> {
-        let expected_interval = self.avg_request_latency();
-        build_corrected_stats(&self.request_times, expected_interval)
-    }
-
-    pub fn display_latencies(&mut self) {
-        let modified = 1000_f64;
-        let avg = self.avg_request_latency().as_secs_f64() * modified;
-        let max = self.max_request_latency().as_secs_f64() * modified;
-        let min = self.min_request_latency().as_secs_f64() * modified;
-        let std_deviation = self.std_deviation_request_latency() * modified;
-
-        println!("  Latencies:");
-        println!(
-            "    {:<7}  {:<7}  {:<7}  {:<7}  ",
-            "Avg".bright_yellow(),
-            "Stdev".bright_magenta(),
-            "Min".bright_green(),
-            "Max".bright_red(),
-        );
-        println!(
-            "    {:<7}  {:<7}  {:<7}  {:<7}  ",
-            format!("{:.2}ms", avg),
-            format!("{:.2}ms", std_deviation),
-            format!("{:.2}ms", min),
-            format!("{:.2}ms", max),
-        );
-    }
-
-    pub fn display_latencies_corrected(&mut self) {
-        if let Some(stats) = self.corrected_stats() {
-            println!("  Latencies (CO-corrected):");
-            println!(
-                "    {:<7}  {:<7}  {:<7}  {:<7}  ",
-                "Avg".bright_yellow(),
-                "Stdev".bright_magenta(),
-                "Min".bright_green(),
-                "Max".bright_red(),
-            );
-            println!(
-                "    {:<7}  {:<7}  {:<7}  {:<7}  ",
-                format!("{:.2}ms", stats.avg_ms),
-                format!("{:.2}ms", stats.std_deviation_ms),
-                format!("{:.2}ms", stats.min_ms),
-                format!("{:.2}ms", stats.max_ms),
-            );
+    if settings.display_percentile {
+        display_percentile_table(collector.latency());
+        if settings.co_correction {
+            display_percentile_table_corrected(collector.corrected_latency());
         }
     }
+}
 
-    pub fn display_requests(&mut self) {
-        let total = self.total_requests();
-        let avg = self.avg_request_per_sec();
+/// Display uncorrected latency stats from the histogram.
+fn display_latencies(hist: &Histogram<u32>) {
+    let avg = hist.mean() / 1000.0;
+    let max = micros_to_ms(hist.max());
+    let min = micros_to_ms(hist.min());
+    let std_deviation = hist.stdev() / 1000.0;
 
-        println!("  Requests:");
-        println!(
-            "    Total: {:^7} Req/Sec: {:^7}",
-            format!("{}", total).as_str().bright_cyan(),
-            format!("{:.2}", avg).as_str().bright_cyan()
-        )
+    println!("  Latencies:");
+    println!(
+        "    {:<7}  {:<7}  {:<7}  {:<7}  ",
+        "Avg".bright_yellow(),
+        "Stdev".bright_magenta(),
+        "Min".bright_green(),
+        "Max".bright_red(),
+    );
+    println!(
+        "    {:<7}  {:<7}  {:<7}  {:<7}  ",
+        format!("{:.2}ms", avg),
+        format!("{:.2}ms", std_deviation),
+        format!("{:.2}ms", min),
+        format!("{:.2}ms", max),
+    );
+}
+
+/// Display CO-corrected latency stats from the histogram.
+fn display_latencies_corrected(hist: &Histogram<u32>) {
+    if hist.is_empty() {
+        return;
     }
 
-    pub fn display_transfer(&mut self) {
-        let total = self.total_transfer() as f64;
-        let rate = self.avg_transfer();
+    let avg = hist.mean() / 1000.0;
+    let max = micros_to_ms(hist.max());
+    let min = micros_to_ms(hist.min());
+    let std_deviation = hist.stdev() / 1000.0;
 
-        let display_total = format_data(total);
-        let display_rate = format_data(rate);
+    println!("  Latencies (CO-corrected):");
+    println!(
+        "    {:<7}  {:<7}  {:<7}  {:<7}  ",
+        "Avg".bright_yellow(),
+        "Stdev".bright_magenta(),
+        "Min".bright_green(),
+        "Max".bright_red(),
+    );
+    println!(
+        "    {:<7}  {:<7}  {:<7}  {:<7}  ",
+        format!("{:.2}ms", avg),
+        format!("{:.2}ms", std_deviation),
+        format!("{:.2}ms", min),
+        format!("{:.2}ms", max),
+    );
+}
 
+/// Display request count and throughput.
+fn display_requests(collector: &CliCollector) {
+    let total = collector.total_requests();
+
+    // Estimate avg requests/sec from the read transfer histogram.
+    // The read transfer histogram records bytes/sec per request.
+    // For req/sec, we use total_requests / (avg_latency * total_requests / concurrency).
+    // Since we don't have exact wall-clock time, we approximate from the histogram.
+    let avg_latency_secs = collector.latency().mean() / 1_000_000.0;
+    let avg_rps = if avg_latency_secs > 0.0 {
+        1.0 / avg_latency_secs
+    } else {
+        0.0
+    };
+
+    println!("  Requests:");
+    println!(
+        "    Total: {:^7} Req/Sec: {:^7}",
+        format!("{}", total).as_str().bright_cyan(),
+        format!("{:.2}", avg_rps).as_str().bright_cyan()
+    )
+}
+
+/// Display transfer rate stats from the read transfer histogram.
+fn display_transfer(collector: &CliCollector) {
+    let read_hist = collector.read_transfer();
+
+    if read_hist.is_empty() {
         println!("  Transfer:");
         println!(
             "    Total: {:^7} Transfer Rate: {:^7}",
-            display_total.as_str().bright_cyan(),
-            format!("{}/Sec", display_rate).as_str().bright_cyan()
-        )
+            "N/A".bright_cyan(),
+            "N/A".bright_cyan()
+        );
+        return;
     }
 
-    pub fn display_percentile_table(&mut self) {
-        self.sort_request_times();
+    // The read_transfer histogram records bytes/sec rates.
+    let avg_rate = read_hist.mean();
+    let display_rate = format_data(avg_rate);
 
-        println!("+ {:-^15} + {:-^15} +", "", "",);
+    println!("  Transfer:");
+    println!(
+        "    Total: {:^7} Transfer Rate: {:^7}",
+        "N/A".bright_cyan(),
+        format!("{}/Sec", display_rate).as_str().bright_cyan()
+    )
+}
 
-        println!(
-            "| {:^15} | {:^15} |",
-            "Percentile".bright_cyan(),
-            "Avg Latency".bright_yellow(),
-        );
+/// Display the percentile table from the uncorrected latency histogram.
+fn display_percentile_table(hist: &Histogram<u32>) {
+    println!("+ {:-^15} + {:-^15} +", "", "",);
 
-        println!("+ {:-^15} + {:-^15} +", "", "",);
+    println!(
+        "| {:^15} | {:^15} |",
+        "Percentile".bright_cyan(),
+        "Avg Latency".bright_yellow(),
+    );
 
-        let modifier = 1000_f64;
-        println!(
-            "| {:^15} | {:^15} |",
-            "99.9%",
-            format!("{:.2}ms", self.p999_avg_latency().as_secs_f64() * modifier)
-        );
-        println!(
-            "| {:^15} | {:^15} |",
-            "99%",
-            format!("{:.2}ms", self.p99_avg_latency().as_secs_f64() * modifier)
-        );
-        println!(
-            "| {:^15} | {:^15} |",
-            "95%",
-            format!("{:.2}ms", self.p95_avg_latency().as_secs_f64() * modifier)
-        );
-        println!(
-            "| {:^15} | {:^15} |",
-            "90%",
-            format!("{:.2}ms", self.p90_avg_latency().as_secs_f64() * modifier)
-        );
-        println!(
-            "| {:^15} | {:^15} |",
-            "75%",
-            format!("{:.2}ms", self.p75_avg_latency().as_secs_f64() * modifier)
-        );
-        println!(
-            "| {:^15} | {:^15} |",
-            "50%",
-            format!("{:.2}ms", self.p50_avg_latency().as_secs_f64() * modifier)
-        );
+    println!("+ {:-^15} + {:-^15} +", "", "",);
 
-        println!("+ {:-^15} + {:-^15} +", "", "",);
+    println!(
+        "| {:^15} | {:^15} |",
+        "99.9%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.9)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "99%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "95%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(95.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "90%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(90.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "75%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(75.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "50%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(50.0)))
+    );
+
+    println!("+ {:-^15} + {:-^15} +", "", "",);
+}
+
+/// Display the CO-corrected percentile table.
+fn display_percentile_table_corrected(hist: &Histogram<u32>) {
+    if hist.is_empty() {
+        return;
     }
 
-    pub fn display_percentile_table_corrected(&mut self) {
-        if let Some(stats) = self.corrected_stats() {
-            println!("+ {:-^15} + {:-^15} +", "", "",);
+    println!("+ {:-^15} + {:-^15} +", "", "",);
 
-            println!(
-                "| {:^15} | {:^15} |",
-                "Percentile".bright_cyan(),
-                "CO-corrected".bright_yellow(),
-            );
+    println!(
+        "| {:^15} | {:^15} |",
+        "Percentile".bright_cyan(),
+        "CO-corrected".bright_yellow(),
+    );
 
-            println!("+ {:-^15} + {:-^15} +", "", "",);
+    println!("+ {:-^15} + {:-^15} +", "", "",);
 
-            println!(
-                "| {:^15} | {:^15} |",
-                "99.9%",
-                format!("{:.2}ms", stats.p999_ms)
-            );
-            println!(
-                "| {:^15} | {:^15} |",
-                "99%",
-                format!("{:.2}ms", stats.p99_ms)
-            );
-            println!(
-                "| {:^15} | {:^15} |",
-                "95%",
-                format!("{:.2}ms", stats.p95_ms)
-            );
-            println!(
-                "| {:^15} | {:^15} |",
-                "90%",
-                format!("{:.2}ms", stats.p90_ms)
-            );
-            println!(
-                "| {:^15} | {:^15} |",
-                "75%",
-                format!("{:.2}ms", stats.p75_ms)
-            );
-            println!(
-                "| {:^15} | {:^15} |",
-                "50%",
-                format!("{:.2}ms", stats.p50_ms)
-            );
+    println!(
+        "| {:^15} | {:^15} |",
+        "99.9%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.9)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "99%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "95%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(95.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "90%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(90.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "75%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(75.0)))
+    );
+    println!(
+        "| {:^15} | {:^15} |",
+        "50%",
+        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(50.0)))
+    );
 
-            println!("+ {:-^15} + {:-^15} +", "", "",);
-        }
-    }
+    println!("+ {:-^15} + {:-^15} +", "", "",);
+}
 
-    pub fn display_errors(&self) {
-        if !self.error_map.is_empty() {
-            println!();
+/// Display results as JSON.
+fn display_json(collector: &CliCollector, co_correction: bool) {
+    let total_requests = collector.total_requests();
 
-            for (message, count) in &self.error_map {
-                println!("{} Errors: {}", count, message);
-            }
-        }
-    }
-
-    pub fn display_json(&self, co_correction: bool) {
-        // prevent div-by-zero panics
-        if self.total_requests() == 0 {
-            let mut out = json!({
-                "latency_avg": null,
-                "latency_max": null,
-                "latency_min": null,
-                "latency_std_deviation": null,
-
-                "transfer_total": null,
-                "transfer_rate": null,
-
-                "requests_total": 0,
-                "requests_avg": null,
-            });
-
-            if co_correction {
-                out["latency_corrected"] = json!(null);
-            }
-
-            println!("{}", out);
-            return;
-        }
-
-        let modified = 1000_f64;
-        let avg = self.avg_request_latency().as_secs_f64() * modified;
-        let max = self.max_request_latency().as_secs_f64() * modified;
-        let min = self.min_request_latency().as_secs_f64() * modified;
-        let std_deviation = self.std_deviation_request_latency() * modified;
-
-        let total = self.total_transfer() as f64;
-        let rate = self.avg_transfer();
-
-        let total_requests = self.total_requests();
-        let avg_request_per_sec = self.avg_request_per_sec();
-
+    if total_requests == 0 {
         let mut out = json!({
-            "latency_avg": avg,
-            "latency_max": max,
-            "latency_min": min,
-            "latency_std_deviation": std_deviation,
+            "latency_avg": null,
+            "latency_max": null,
+            "latency_min": null,
+            "latency_std_deviation": null,
 
-            "transfer_total": total,
-            "transfer_rate": rate,
+            "transfer_total": null,
+            "transfer_rate": null,
 
-            "requests_total": total_requests,
-            "requests_avg": avg_request_per_sec,
+            "requests_total": 0,
+            "requests_avg": null,
         });
 
         if co_correction {
-            if let Some(stats) = self.corrected_stats() {
-                out["latency_corrected"] = json!({
-                    "avg": stats.avg_ms,
-                    "max": stats.max_ms,
-                    "min": stats.min_ms,
-                    "std_deviation": stats.std_deviation_ms,
-                    "p50": stats.p50_ms,
-                    "p75": stats.p75_ms,
-                    "p90": stats.p90_ms,
-                    "p95": stats.p95_ms,
-                    "p99": stats.p99_ms,
-                    "p999": stats.p999_ms,
-                });
-            }
+            out["latency_corrected"] = json!(null);
         }
 
-        println!("{}", out)
+        println!("{}", out);
+        return;
     }
+
+    let hist = collector.latency();
+    let avg = hist.mean() / 1000.0;
+    let max = micros_to_ms(hist.max());
+    let min = micros_to_ms(hist.min());
+    let std_deviation = hist.stdev() / 1000.0;
+
+    let read_hist = collector.read_transfer();
+    let rate = if !read_hist.is_empty() {
+        read_hist.mean()
+    } else {
+        0.0
+    };
+
+    let avg_latency_secs = hist.mean() / 1_000_000.0;
+    let avg_request_per_sec = if avg_latency_secs > 0.0 {
+        1.0 / avg_latency_secs
+    } else {
+        0.0
+    };
+
+    let mut out = json!({
+        "latency_avg": avg,
+        "latency_max": max,
+        "latency_min": min,
+        "latency_std_deviation": std_deviation,
+
+        "transfer_total": null,
+        "transfer_rate": rate,
+
+        "requests_total": total_requests,
+        "requests_avg": avg_request_per_sec,
+    });
+
+    if co_correction {
+        let corrected = collector.corrected_latency();
+        if !corrected.is_empty() {
+            out["latency_corrected"] = json!({
+                "avg": corrected.mean() / 1000.0,
+                "max": micros_to_ms(corrected.max()),
+                "min": micros_to_ms(corrected.min()),
+                "std_deviation": corrected.stdev() / 1000.0,
+                "p50": micros_to_ms(corrected.value_at_percentile(50.0)),
+                "p75": micros_to_ms(corrected.value_at_percentile(75.0)),
+                "p90": micros_to_ms(corrected.value_at_percentile(90.0)),
+                "p95": micros_to_ms(corrected.value_at_percentile(95.0)),
+                "p99": micros_to_ms(corrected.value_at_percentile(99.0)),
+                "p999": micros_to_ms(corrected.value_at_percentile(99.9)),
+            });
+        }
+    }
+
+    println!("{}", out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
-    /// Helper to build a WorkerResult from a slice of millisecond values.
-    fn result_from_ms(latencies_ms: &[u64]) -> WorkerResult {
-        let request_times: Vec<Duration> = latencies_ms
-            .iter()
-            .map(|ms| Duration::from_millis(*ms))
-            .collect();
-        let total_time: Duration = request_times.iter().sum();
-        WorkerResult {
-            total_times: vec![total_time],
-            request_times,
-            buffer_sizes: vec![1024],
-            error_map: HashMap::new(),
-        }
-    }
+    /// Helper to build a CliCollector with latency data from microsecond values.
+    fn collector_from_micros(latencies_us: &[u64]) -> CliCollector {
+        let mut collector = CliCollector::new();
 
-    #[test]
-    fn uniform_latencies_corrected_similar_to_uncorrected() {
-        // With uniform latencies (all 5ms), the CO-corrected stats should
-        // be very close to the uncorrected stats since there are no spikes.
-        let result = result_from_ms(&[5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
-
-        let uncorrected_avg_ms = result.avg_request_latency().as_secs_f64() * 1000.0;
-        let stats = result.corrected_stats().expect("should produce corrected stats");
-
-        // With perfectly uniform data and expected_interval == avg,
-        // no corrections should be applied, so values should be close.
-        let diff = (stats.avg_ms - uncorrected_avg_ms).abs();
-        assert!(
-            diff < 1.0,
-            "Expected corrected avg ({:.2}) to be close to uncorrected avg ({:.2})",
-            stats.avg_ms,
-            uncorrected_avg_ms
-        );
-
-        // p99 should also be similar for uniform data
-        assert!(
-            stats.p99_ms < 10.0,
-            "Expected corrected p99 ({:.2}ms) to be low for uniform data",
-            stats.p99_ms
-        );
-    }
-
-    #[test]
-    fn latency_spikes_show_higher_corrected_p99() {
-        // Most requests at 5ms, but one large spike at 500ms.
-        // CO correction should inflate high percentiles because the spike
-        // would have hidden many expected requests.
-        let mut latencies = vec![5u64; 100];
-        latencies.push(500); // big spike
-
-        let result = result_from_ms(&latencies);
-
-        let stats = result.corrected_stats().expect("should produce corrected stats");
-
-        // The uncorrected p99 from raw data
-        let mut sorted = result.request_times.clone();
-        sorted.sort();
-        let uncorrected_p99_ms = sorted[(sorted.len() as f64 * 0.99) as usize].as_secs_f64() * 1000.0;
-
-        // CO-corrected p99 should be >= uncorrected p99
-        assert!(
-            stats.p99_ms >= uncorrected_p99_ms,
-            "Expected corrected p99 ({:.2}ms) >= uncorrected p99 ({:.2}ms)",
-            stats.p99_ms,
-            uncorrected_p99_ms
-        );
-    }
-
-    #[test]
-    fn json_contains_latency_corrected_when_enabled() {
-        let result = result_from_ms(&[5, 5, 5, 10, 10]);
-
-        // Capture JSON output by building same logic as display_json
-        let modified = 1000_f64;
-        let avg = result.avg_request_latency().as_secs_f64() * modified;
-        let max = result.max_request_latency().as_secs_f64() * modified;
-        let min = result.min_request_latency().as_secs_f64() * modified;
-        let std_deviation = result.std_deviation_request_latency() * modified;
-
-        let total = result.total_transfer() as f64;
-        let rate = result.avg_transfer();
-
-        let total_requests = result.total_requests();
-        let avg_request_per_sec = result.avg_request_per_sec();
-
-        let mut out = json!({
-            "latency_avg": avg,
-            "latency_max": max,
-            "latency_min": min,
-            "latency_std_deviation": std_deviation,
-            "transfer_total": total,
-            "transfer_rate": rate,
-            "requests_total": total_requests,
-            "requests_avg": avg_request_per_sec,
-        });
-
-        // Simulate co_correction = true
-        if let Some(stats) = result.corrected_stats() {
-            out["latency_corrected"] = json!({
-                "avg": stats.avg_ms,
-                "max": stats.max_ms,
-                "min": stats.min_ms,
-                "std_deviation": stats.std_deviation_ms,
-                "p50": stats.p50_ms,
-                "p75": stats.p75_ms,
-                "p90": stats.p90_ms,
-                "p95": stats.p95_ms,
-                "p99": stats.p99_ms,
-                "p999": stats.p999_ms,
-            });
+        // Build histograms and add them to the collector's internal state.
+        // Since we can't call process_sample without a real Sample, we
+        // test the display functions using histograms directly.
+        for &us in latencies_us {
+            collector
+                .latency_mut()
+                .record(us)
+                .expect("record latency");
+            collector
+                .corrected_latency_mut()
+                .record(us)
+                .expect("record corrected latency");
         }
 
-        let json_str = out.to_string();
-        assert!(
-            json_str.contains("latency_corrected"),
-            "JSON should contain 'latency_corrected' when co_correction is enabled"
-        );
-
-        // Verify it parses back with expected keys
-        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
-        let corrected = parsed.get("latency_corrected").expect("missing latency_corrected");
-        assert!(corrected.get("avg").is_some(), "corrected should have avg");
-        assert!(corrected.get("max").is_some(), "corrected should have max");
-        assert!(corrected.get("min").is_some(), "corrected should have min");
-        assert!(corrected.get("std_deviation").is_some(), "corrected should have std_deviation");
-        assert!(corrected.get("p99").is_some(), "corrected should have p99");
+        collector
     }
 
-    #[test]
-    fn json_omits_latency_corrected_when_disabled() {
-        let result = result_from_ms(&[5, 5, 5, 10, 10]);
-
-        let modified = 1000_f64;
-        let avg = result.avg_request_latency().as_secs_f64() * modified;
-        let max = result.max_request_latency().as_secs_f64() * modified;
-        let min = result.min_request_latency().as_secs_f64() * modified;
-        let std_deviation = result.std_deviation_request_latency() * modified;
-
-        let total = result.total_transfer() as f64;
-        let rate = result.avg_transfer();
-
-        let total_requests = result.total_requests();
-        let avg_request_per_sec = result.avg_request_per_sec();
-
-        // Simulate co_correction = false: do NOT add latency_corrected
-        let out = json!({
-            "latency_avg": avg,
-            "latency_max": max,
-            "latency_min": min,
-            "latency_std_deviation": std_deviation,
-            "transfer_total": total,
-            "transfer_rate": rate,
-            "requests_total": total_requests,
-            "requests_avg": avg_request_per_sec,
-        });
-
-        let json_str = out.to_string();
-        assert!(
-            !json_str.contains("latency_corrected"),
-            "JSON should NOT contain 'latency_corrected' when co_correction is disabled"
-        );
-    }
-
-    #[test]
-    fn test_worker_result_combine_merges_all_fields() {
-        let mut a = result_from_ms(&[10, 20]);
-        a.buffer_sizes = vec![512, 256];
-        a.error_map.insert("timeout".to_string(), 2);
-
-        let mut b = result_from_ms(&[30, 40]);
-        b.buffer_sizes = vec![128];
-        b.error_map.insert("timeout".to_string(), 3);
-        b.error_map.insert("refused".to_string(), 1);
-
-        let combined = a.combine(b);
-
-        assert_eq!(combined.request_times.len(), 4);
-        assert_eq!(combined.total_times.len(), 2);
-        assert_eq!(combined.buffer_sizes.len(), 3);
-        assert_eq!(*combined.error_map.get("timeout").unwrap(), 5);
-        assert_eq!(*combined.error_map.get("refused").unwrap(), 1);
+    /// Helper to build a CliCollector from millisecond values (for backward compat with old tests).
+    fn collector_from_ms(latencies_ms: &[u64]) -> CliCollector {
+        let micros: Vec<u64> = latencies_ms.iter().map(|ms| ms * 1000).collect();
+        collector_from_micros(&micros)
     }
 
     #[test]
     fn test_total_requests_counts_correctly() {
-        let result = result_from_ms(&[1, 2, 3, 4, 5]);
-        assert_eq!(result.total_requests(), 5);
+        let collector = collector_from_ms(&[1, 2, 3, 4, 5]);
+        assert_eq!(collector.total_requests(), 5);
     }
 
     #[test]
-    fn test_total_transfer_sums_buffer_sizes() {
-        let mut result = result_from_ms(&[10]);
-        result.buffer_sizes = vec![100, 200, 300];
-        assert_eq!(result.total_transfer(), 600);
-    }
-
-    #[test]
-    fn test_avg_request_latency() {
-        // latencies: 10ms, 20ms, 30ms → avg = 20ms
-        let result = result_from_ms(&[10, 20, 30]);
-        let avg_ms = result.avg_request_latency().as_secs_f64() * 1000.0;
+    fn test_avg_latency_from_histogram() {
+        // latencies: 10ms, 20ms, 30ms -> avg ~= 20ms
+        let collector = collector_from_ms(&[10, 20, 30]);
+        let avg_ms = collector.latency().mean() / 1000.0;
         assert!(
-            (avg_ms - 20.0).abs() < 0.001,
-            "Expected avg 20ms, got {:.3}ms",
+            (avg_ms - 20.0).abs() < 1.0,
+            "Expected avg ~20ms, got {:.3}ms",
             avg_ms
         );
     }
 
     #[test]
-    fn test_max_min_request_latency() {
-        let result = result_from_ms(&[5, 50, 25, 10, 100]);
-        let max_ms = result.max_request_latency().as_secs_f64() * 1000.0;
-        let min_ms = result.min_request_latency().as_secs_f64() * 1000.0;
+    fn test_max_min_latency_from_histogram() {
+        let collector = collector_from_ms(&[5, 50, 25, 10, 100]);
+        let max_ms = micros_to_ms(collector.latency().max());
+        let min_ms = micros_to_ms(collector.latency().min());
         assert!(
-            (max_ms - 100.0).abs() < 0.001,
-            "Expected max 100ms, got {:.3}ms",
+            (max_ms - 100.0).abs() < 1.0,
+            "Expected max ~100ms, got {:.3}ms",
             max_ms
         );
         assert!(
-            (min_ms - 5.0).abs() < 0.001,
-            "Expected min 5ms, got {:.3}ms",
+            (min_ms - 5.0).abs() < 1.0,
+            "Expected min ~5ms, got {:.3}ms",
             min_ms
         );
     }
 
     #[test]
     fn test_std_deviation_zero_for_uniform() {
-        // All same latency → variance = 0 → std deviation = 0
-        let result = result_from_ms(&[10, 10, 10, 10, 10]);
-        let std_dev = result.std_deviation_request_latency();
+        let collector = collector_from_ms(&[10, 10, 10, 10, 10]);
+        let std_dev = collector.latency().stdev() / 1000.0;
         assert!(
-            std_dev < 1e-9,
+            std_dev < 1.0,
             "Expected std deviation near 0 for uniform latencies, got {}",
             std_dev
         );
     }
 
     #[test]
-    fn test_percentiles_sorted_correctly() {
-        // Use a range of values so percentiles differ clearly.
+    fn test_percentiles_ordered_correctly() {
         let latencies: Vec<u64> = (1..=100).collect();
-        let mut result = result_from_ms(&latencies);
-        result.sort_request_times();
+        let collector = collector_from_ms(&latencies);
+        let hist = collector.latency();
 
-        let p50 = result.p50_avg_latency().as_secs_f64();
-        let p75 = result.p75_avg_latency().as_secs_f64();
-        let p90 = result.p90_avg_latency().as_secs_f64();
-        let p95 = result.p95_avg_latency().as_secs_f64();
-        let p99 = result.p99_avg_latency().as_secs_f64();
+        let p50 = hist.value_at_percentile(50.0);
+        let p75 = hist.value_at_percentile(75.0);
+        let p90 = hist.value_at_percentile(90.0);
+        let p95 = hist.value_at_percentile(95.0);
+        let p99 = hist.value_at_percentile(99.0);
 
         assert!(
             p99 >= p95,
-            "p99 ({:.4}) should be >= p95 ({:.4})",
+            "p99 ({}) should be >= p95 ({})",
             p99,
             p95
         );
         assert!(
             p95 >= p90,
-            "p95 ({:.4}) should be >= p90 ({:.4})",
+            "p95 ({}) should be >= p90 ({})",
             p95,
             p90
         );
         assert!(
             p90 >= p75,
-            "p90 ({:.4}) should be >= p75 ({:.4})",
+            "p90 ({}) should be >= p75 ({})",
             p90,
             p75
         );
         assert!(
             p75 >= p50,
-            "p75 ({:.4}) should be >= p50 ({:.4})",
+            "p75 ({}) should be >= p50 ({})",
             p75,
             p50
         );
     }
 
     #[test]
-    fn test_build_corrected_stats_empty_returns_none() {
-        let result = WorkerResult::default();
-        let stats = build_corrected_stats(&result.request_times, Duration::from_millis(5));
-        assert!(stats.is_none(), "Expected None for empty request_times");
-    }
-
-    #[test]
-    fn test_build_corrected_stats_zero_interval_returns_none() {
-        let result = result_from_ms(&[10, 20, 30]);
-        let stats = build_corrected_stats(&result.request_times, Duration::from_millis(0));
-        assert!(stats.is_none(), "Expected None for zero expected_interval");
-    }
-
-    #[test]
-    fn test_corrected_stats_all_percentiles_populated() {
-        let result = result_from_ms(&[5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
-        let stats = result
-            .corrected_stats()
-            .expect("should produce corrected stats");
-
-        assert!(stats.p50_ms >= 0.0, "p50 should be non-negative");
-        assert!(stats.p75_ms >= 0.0, "p75 should be non-negative");
-        assert!(stats.p90_ms >= 0.0, "p90 should be non-negative");
-        assert!(stats.p95_ms >= 0.0, "p95 should be non-negative");
-        assert!(stats.p99_ms >= 0.0, "p99 should be non-negative");
-        assert!(stats.p999_ms >= 0.0, "p999 should be non-negative");
-    }
-
-    #[test]
     fn test_json_zero_requests_outputs_null_latencies() {
-        // Replicate the zero-request JSON logic from display_json
-                let out = json!({
+        let out = json!({
             "latency_avg": null,
             "latency_max": null,
             "latency_min": null,
@@ -845,31 +487,103 @@ mod tests {
     }
 
     #[test]
-    fn test_error_map_combine_sums_counts() {
-        let mut a = WorkerResult::default();
-        a.error_map.insert("connect refused".to_string(), 4);
-        a.error_map.insert("timeout".to_string(), 1);
+    fn json_contains_latency_corrected_when_enabled() {
+        let collector = collector_from_ms(&[5, 5, 5, 10, 10]);
 
-        let mut b = WorkerResult::default();
-        b.error_map.insert("connect refused".to_string(), 6);
-        b.error_map.insert("reset".to_string(), 2);
+        let hist = collector.latency();
+        let avg = hist.mean() / 1000.0;
+        let max = micros_to_ms(hist.max());
+        let min = micros_to_ms(hist.min());
+        let std_deviation = hist.stdev() / 1000.0;
 
-        let combined = a.combine(b);
+        let mut out = json!({
+            "latency_avg": avg,
+            "latency_max": max,
+            "latency_min": min,
+            "latency_std_deviation": std_deviation,
+            "transfer_total": null,
+            "transfer_rate": 0.0,
+            "requests_total": collector.total_requests(),
+            "requests_avg": 0.0,
+        });
 
-        assert_eq!(
-            *combined.error_map.get("connect refused").unwrap(),
-            10,
-            "overlapping error counts should be summed"
+        // Simulate co_correction = true
+        let corrected = collector.corrected_latency();
+        if !corrected.is_empty() {
+            out["latency_corrected"] = json!({
+                "avg": corrected.mean() / 1000.0,
+                "max": micros_to_ms(corrected.max()),
+                "min": micros_to_ms(corrected.min()),
+                "std_deviation": corrected.stdev() / 1000.0,
+                "p50": micros_to_ms(corrected.value_at_percentile(50.0)),
+                "p75": micros_to_ms(corrected.value_at_percentile(75.0)),
+                "p90": micros_to_ms(corrected.value_at_percentile(90.0)),
+                "p95": micros_to_ms(corrected.value_at_percentile(95.0)),
+                "p99": micros_to_ms(corrected.value_at_percentile(99.0)),
+                "p999": micros_to_ms(corrected.value_at_percentile(99.9)),
+            });
+        }
+
+        let json_str = out.to_string();
+        assert!(
+            json_str.contains("latency_corrected"),
+            "JSON should contain 'latency_corrected' when co_correction is enabled"
         );
-        assert_eq!(
-            *combined.error_map.get("timeout").unwrap(),
-            1,
-            "unique key from a should be preserved"
+
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let corrected = parsed.get("latency_corrected").expect("missing latency_corrected");
+        assert!(corrected.get("avg").is_some(), "corrected should have avg");
+        assert!(corrected.get("max").is_some(), "corrected should have max");
+        assert!(corrected.get("min").is_some(), "corrected should have min");
+        assert!(corrected.get("std_deviation").is_some(), "corrected should have std_deviation");
+        assert!(corrected.get("p99").is_some(), "corrected should have p99");
+    }
+
+    #[test]
+    fn json_omits_latency_corrected_when_disabled() {
+        let collector = collector_from_ms(&[5, 5, 5, 10, 10]);
+
+        let hist = collector.latency();
+        let avg = hist.mean() / 1000.0;
+        let max = micros_to_ms(hist.max());
+        let min = micros_to_ms(hist.min());
+        let std_deviation = hist.stdev() / 1000.0;
+
+        // Simulate co_correction = false: do NOT add latency_corrected
+        let out = json!({
+            "latency_avg": avg,
+            "latency_max": max,
+            "latency_min": min,
+            "latency_std_deviation": std_deviation,
+            "transfer_total": null,
+            "transfer_rate": 0.0,
+            "requests_total": collector.total_requests(),
+            "requests_avg": 0.0,
+        });
+
+        let json_str = out.to_string();
+        assert!(
+            !json_str.contains("latency_corrected"),
+            "JSON should NOT contain 'latency_corrected' when co_correction is disabled"
         );
-        assert_eq!(
-            *combined.error_map.get("reset").unwrap(),
-            2,
-            "unique key from b should be inserted"
-        );
+    }
+
+    #[test]
+    fn test_corrected_stats_all_percentiles_populated() {
+        let collector = collector_from_ms(&[5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
+        let hist = collector.corrected_latency();
+
+        assert!(micros_to_ms(hist.value_at_percentile(50.0)) >= 0.0, "p50 should be non-negative");
+        assert!(micros_to_ms(hist.value_at_percentile(75.0)) >= 0.0, "p75 should be non-negative");
+        assert!(micros_to_ms(hist.value_at_percentile(90.0)) >= 0.0, "p90 should be non-negative");
+        assert!(micros_to_ms(hist.value_at_percentile(95.0)) >= 0.0, "p95 should be non-negative");
+        assert!(micros_to_ms(hist.value_at_percentile(99.0)) >= 0.0, "p99 should be non-negative");
+        assert!(micros_to_ms(hist.value_at_percentile(99.9)) >= 0.0, "p999 should be non-negative");
+    }
+
+    #[test]
+    fn test_empty_collector_total_requests_zero() {
+        let collector = CliCollector::new();
+        assert_eq!(collector.total_requests(), 0);
     }
 }

@@ -59,6 +59,18 @@ impl CliCollector {
     pub fn sample_count(&self) -> usize {
         self.sample_count
     }
+
+    /// Mutable access to the uncorrected latency histogram (for testing).
+    #[cfg(test)]
+    pub fn latency_mut(&mut self) -> &mut Histogram<u32> {
+        &mut self.latency
+    }
+
+    /// Mutable access to the CO-corrected latency histogram (for testing).
+    #[cfg(test)]
+    pub fn corrected_latency_mut(&mut self) -> &mut Histogram<u32> {
+        &mut self.corrected_latency
+    }
 }
 
 impl Default for CliCollector {
