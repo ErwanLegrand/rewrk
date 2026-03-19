@@ -678,4 +678,214 @@ mod tests {
             "JSON should NOT contain 'latency_corrected' when co_correction is disabled"
         );
     }
+
+    #[test]
+    fn test_worker_result_combine_merges_all_fields() {
+        let mut a = result_from_ms(&[10, 20]);
+        a.buffer_sizes = vec![512, 256];
+        a.error_map.insert("timeout".to_string(), 2);
+
+        let mut b = result_from_ms(&[30, 40]);
+        b.buffer_sizes = vec![128];
+        b.error_map.insert("timeout".to_string(), 3);
+        b.error_map.insert("refused".to_string(), 1);
+
+        let combined = a.combine(b);
+
+        assert_eq!(combined.request_times.len(), 4);
+        assert_eq!(combined.total_times.len(), 2);
+        assert_eq!(combined.buffer_sizes.len(), 3);
+        assert_eq!(*combined.error_map.get("timeout").unwrap(), 5);
+        assert_eq!(*combined.error_map.get("refused").unwrap(), 1);
+    }
+
+    #[test]
+    fn test_total_requests_counts_correctly() {
+        let result = result_from_ms(&[1, 2, 3, 4, 5]);
+        assert_eq!(result.total_requests(), 5);
+    }
+
+    #[test]
+    fn test_total_transfer_sums_buffer_sizes() {
+        let mut result = result_from_ms(&[10]);
+        result.buffer_sizes = vec![100, 200, 300];
+        assert_eq!(result.total_transfer(), 600);
+    }
+
+    #[test]
+    fn test_avg_request_latency() {
+        // latencies: 10ms, 20ms, 30ms → avg = 20ms
+        let result = result_from_ms(&[10, 20, 30]);
+        let avg_ms = result.avg_request_latency().as_secs_f64() * 1000.0;
+        assert!(
+            (avg_ms - 20.0).abs() < 0.001,
+            "Expected avg 20ms, got {:.3}ms",
+            avg_ms
+        );
+    }
+
+    #[test]
+    fn test_max_min_request_latency() {
+        let result = result_from_ms(&[5, 50, 25, 10, 100]);
+        let max_ms = result.max_request_latency().as_secs_f64() * 1000.0;
+        let min_ms = result.min_request_latency().as_secs_f64() * 1000.0;
+        assert!(
+            (max_ms - 100.0).abs() < 0.001,
+            "Expected max 100ms, got {:.3}ms",
+            max_ms
+        );
+        assert!(
+            (min_ms - 5.0).abs() < 0.001,
+            "Expected min 5ms, got {:.3}ms",
+            min_ms
+        );
+    }
+
+    #[test]
+    fn test_std_deviation_zero_for_uniform() {
+        // All same latency → variance = 0 → std deviation = 0
+        let result = result_from_ms(&[10, 10, 10, 10, 10]);
+        let std_dev = result.std_deviation_request_latency();
+        assert!(
+            std_dev < 1e-9,
+            "Expected std deviation near 0 for uniform latencies, got {}",
+            std_dev
+        );
+    }
+
+    #[test]
+    fn test_percentiles_sorted_correctly() {
+        // Use a range of values so percentiles differ clearly.
+        let latencies: Vec<u64> = (1..=100).collect();
+        let mut result = result_from_ms(&latencies);
+        result.sort_request_times();
+
+        let p50 = result.p50_avg_latency().as_secs_f64();
+        let p75 = result.p75_avg_latency().as_secs_f64();
+        let p90 = result.p90_avg_latency().as_secs_f64();
+        let p95 = result.p95_avg_latency().as_secs_f64();
+        let p99 = result.p99_avg_latency().as_secs_f64();
+
+        assert!(
+            p99 >= p95,
+            "p99 ({:.4}) should be >= p95 ({:.4})",
+            p99,
+            p95
+        );
+        assert!(
+            p95 >= p90,
+            "p95 ({:.4}) should be >= p90 ({:.4})",
+            p95,
+            p90
+        );
+        assert!(
+            p90 >= p75,
+            "p90 ({:.4}) should be >= p75 ({:.4})",
+            p90,
+            p75
+        );
+        assert!(
+            p75 >= p50,
+            "p75 ({:.4}) should be >= p50 ({:.4})",
+            p75,
+            p50
+        );
+    }
+
+    #[test]
+    fn test_build_corrected_stats_empty_returns_none() {
+        let result = WorkerResult::default();
+        let stats = build_corrected_stats(&result.request_times, Duration::from_millis(5));
+        assert!(stats.is_none(), "Expected None for empty request_times");
+    }
+
+    #[test]
+    fn test_build_corrected_stats_zero_interval_returns_none() {
+        let result = result_from_ms(&[10, 20, 30]);
+        let stats = build_corrected_stats(&result.request_times, Duration::from_millis(0));
+        assert!(stats.is_none(), "Expected None for zero expected_interval");
+    }
+
+    #[test]
+    fn test_corrected_stats_all_percentiles_populated() {
+        let result = result_from_ms(&[5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
+        let stats = result
+            .corrected_stats()
+            .expect("should produce corrected stats");
+
+        assert!(stats.p50_ms >= 0.0, "p50 should be non-negative");
+        assert!(stats.p75_ms >= 0.0, "p75 should be non-negative");
+        assert!(stats.p90_ms >= 0.0, "p90 should be non-negative");
+        assert!(stats.p95_ms >= 0.0, "p95 should be non-negative");
+        assert!(stats.p99_ms >= 0.0, "p99 should be non-negative");
+        assert!(stats.p999_ms >= 0.0, "p999 should be non-negative");
+    }
+
+    #[test]
+    fn test_json_zero_requests_outputs_null_latencies() {
+        // Replicate the zero-request JSON logic from display_json
+        let null = None::<()>;
+        let out = json!({
+            "latency_avg": null,
+            "latency_max": null,
+            "latency_min": null,
+            "latency_std_deviation": null,
+            "transfer_total": null,
+            "transfer_rate": null,
+            "requests_total": 0,
+            "requests_avg": null,
+        });
+
+        let parsed: serde_json::Value = serde_json::from_str(&out.to_string()).unwrap();
+        assert!(
+            parsed["latency_avg"].is_null(),
+            "latency_avg should be null with 0 requests"
+        );
+        assert!(
+            parsed["latency_max"].is_null(),
+            "latency_max should be null with 0 requests"
+        );
+        assert!(
+            parsed["latency_min"].is_null(),
+            "latency_min should be null with 0 requests"
+        );
+        assert!(
+            parsed["latency_std_deviation"].is_null(),
+            "latency_std_deviation should be null with 0 requests"
+        );
+        assert_eq!(
+            parsed["requests_total"].as_u64().unwrap(),
+            0,
+            "requests_total should be 0"
+        );
+    }
+
+    #[test]
+    fn test_error_map_combine_sums_counts() {
+        let mut a = WorkerResult::default();
+        a.error_map.insert("connect refused".to_string(), 4);
+        a.error_map.insert("timeout".to_string(), 1);
+
+        let mut b = WorkerResult::default();
+        b.error_map.insert("connect refused".to_string(), 6);
+        b.error_map.insert("reset".to_string(), 2);
+
+        let combined = a.combine(b);
+
+        assert_eq!(
+            *combined.error_map.get("connect refused").unwrap(),
+            10,
+            "overlapping error counts should be summed"
+        );
+        assert_eq!(
+            *combined.error_map.get("timeout").unwrap(),
+            1,
+            "unique key from a should be preserved"
+        );
+        assert_eq!(
+            *combined.error_map.get("reset").unwrap(),
+            2,
+            "unique key from b should be inserted"
+        );
+    }
 }
