@@ -32,21 +32,21 @@
 
 ## Phase 3: Cleanup and Hardening
 
-- [ ] Task: Remove src/http/ module
-    - [ ] Delete src/http/mod.rs, src/http/usage.rs, src/http/user_input.rs
-    - [ ] Move URI parsing from src/http/user_input.rs to src/main.rs or a small utility
-    - [ ] Update src/main.rs imports
-    - [ ] Verify cargo build succeeds
-- [ ] Task: Document ExpectedIntervalTracker CMA approximation
-    - [ ] Add module-level doc comment explaining CMA approach and its limitations
-    - [ ] Note that under sustained load spikes, the CMA inflates, reducing correction strength
-    - [ ] Suggest fixed interval as alternative when target RPS is known
-- [ ] Task: Verify test coverage improvement
-    - [ ] Run cargo llvm-cov and document final numbers
-    - [ ] Verify CLI crate coverage improved from 35% baseline
-    - [ ] Add targeted tests if needed for uncovered paths
-- [ ] Task: Final clippy and test verification
-    - [ ] Run cargo clippy --all -- -D warnings and verify zero warnings
-    - [ ] Run cargo test --all and verify zero failures
-    - [ ] Verify --json output schema backward compatibility
+- [x] Task: Remove src/http/ module [fdd8af7]
+    - [x] Delete src/http/mod.rs, src/http/usage.rs, src/http/user_input.rs
+    - [x] Move URI parsing from src/http/user_input.rs to src/main.rs or a small utility
+    - [x] Update src/main.rs imports
+    - [x] Verify cargo build succeeds
+- [x] Task: Document ExpectedIntervalTracker CMA approximation [fdd8af7]
+    - [x] Add module-level doc comment explaining CMA approach and its limitations
+    - [x] Note that under sustained load spikes, the CMA inflates, reducing correction strength
+    - [x] Suggest fixed interval as alternative when target RPS is known
+- [x] Task: Verify test coverage improvement
+    - [x] Run cargo llvm-cov and document final numbers (rewrk-core: 92.8%, cli_collector: 97%, cli_producer: 98%)
+    - [x] Verify CLI crate coverage improved from 35% baseline
+    - [x] Add targeted tests if needed for uncovered paths
+- [x] Task: Final clippy and test verification
+    - [x] Run cargo clippy --all -- -D warnings and verify zero warnings
+    - [x] Run cargo test --all and verify zero failures (117 tests)
+    - [x] Verify --json output schema backward compatibility
 - [ ] Task: Conductor - User Manual Verification 'Cleanup and Hardening' (Protocol in workflow.md)
