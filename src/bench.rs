@@ -149,7 +149,7 @@ async fn run(settings: BenchmarkSettings) -> Result<()> {
 }
 
 /// Uber lazy way of just stringing everything and limiting it to 2 d.p
-fn string<T: Display>(value: T) -> String {
+pub(crate) fn string<T: Display>(value: T) -> String {
     format!("{:.2}", value)
 }
 
@@ -158,7 +158,7 @@ fn string<T: Display>(value: T) -> String {
 ///
 /// E.g.
 /// 10,000 seconds -> '2 hours, 46 minutes, 40 seconds'
-fn humanize(time: Duration) -> String {
+pub(crate) fn humanize(time: Duration) -> String {
     let seconds = time.as_secs();
 
     let (minutes, seconds) = div_mod(seconds, 60);
@@ -184,4 +184,43 @@ fn humanize(time: Duration) -> String {
     };
 
     human.join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- humanize tests ---
+
+    #[test]
+    fn humanize_seconds_only() {
+        assert_eq!(humanize(Duration::from_secs(10)), "10 second(s)");
+    }
+
+    #[test]
+    fn humanize_minutes_and_seconds() {
+        assert_eq!(humanize(Duration::from_secs(90)), "1 minute(s), 30 second(s)");
+    }
+
+    #[test]
+    fn humanize_hours_minutes_seconds() {
+        assert_eq!(humanize(Duration::from_secs(3661)), "1 hour(s), 1 minute(s), 1 second(s)");
+    }
+
+    #[test]
+    fn humanize_one_day() {
+        assert_eq!(humanize(Duration::from_secs(86400)), "1 day(s)");
+    }
+
+    // --- string tests ---
+
+    #[test]
+    fn string_rounds_to_two_decimal_places() {
+        assert_eq!(string(3.14159_f64), "3.14");
+    }
+
+    #[test]
+    fn string_integer_formats_with_two_decimals() {
+        assert_eq!(string(100_f64), "100.00");
+    }
 }

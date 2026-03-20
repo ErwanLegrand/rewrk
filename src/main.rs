@@ -1,30 +1,20 @@
 use std::str::FromStr;
-use std::sync::LazyLock;
 
-use ::http::header::HeaderName;
-use ::http::{HeaderMap, HeaderValue, Method};
-use anyhow::{Context, Error, Result};
+use ::http::{HeaderMap, Method};
+use anyhow::{Context, Result};
 use clap::Parser;
 use hyper::body::Bytes;
-use regex::Regex;
-use tokio::time::Duration;
 
 mod bench;
 mod cli_collector;
 mod cli_producer;
+mod parsing;
 mod results;
 mod runtime;
 mod utils;
 
+use parsing::{parse_duration, parse_header};
 use rewrk_core::HttpProtocol;
-
-/// Matches a string like '12d 24h 5m 45s' to a regex capture.
-static DURATION_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        "(?P<days>[0-9]+)d|(?P<hours>[0-9]+)h|(?P<minutes>[0-9]+)m|(?P<seconds>[0-9]+)s",
-    )
-    .unwrap()
-});
 
 #[derive(Parser)]
 #[command(
@@ -147,58 +137,3 @@ fn main() -> anyhow::Result<()> {
     bench::start_benchmark(settings)
 }
 
-/// Parses a duration string from the CLI to a Duration.
-/// '11d 3h 32m 4s' -> Duration
-///
-/// If no matches are found for the string or an invalid match
-/// is captured an error message is returned.
-fn parse_duration(duration: &str) -> Result<Duration> {
-    let mut dur = Duration::default();
-
-    for cap in DURATION_RE.captures_iter(duration) {
-        let add_to = if let Some(days) = cap.name("days") {
-            let days = days.as_str().parse::<u64>()?;
-            let seconds = days
-                .checked_mul(24 * 60 * 60)
-                .ok_or_else(|| anyhow::anyhow!("duration overflow: {} days", days))?;
-            Duration::from_secs(seconds)
-        } else if let Some(hours) = cap.name("hours") {
-            let hours = hours.as_str().parse::<u64>()?;
-            let seconds = hours
-                .checked_mul(60 * 60)
-                .ok_or_else(|| anyhow::anyhow!("duration overflow: {} hours", hours))?;
-            Duration::from_secs(seconds)
-        } else if let Some(minutes) = cap.name("minutes") {
-            let minutes = minutes.as_str().parse::<u64>()?;
-            let seconds = minutes
-                .checked_mul(60)
-                .ok_or_else(|| anyhow::anyhow!("duration overflow: {} minutes", minutes))?;
-            Duration::from_secs(seconds)
-        } else if let Some(seconds) = cap.name("seconds") {
-            let seconds = seconds.as_str().parse::<u64>()?;
-            Duration::from_secs(seconds)
-        } else {
-            return Err(Error::msg(format!("invalid match: {:?}", cap)));
-        };
-
-        dur += add_to;
-    }
-
-    if dur.as_secs() == 0 {
-        return Err(Error::msg(format!(
-            "failed to extract any valid duration from {}",
-            duration
-        )));
-    }
-
-    Ok(dur)
-}
-
-fn parse_header(value: &str) -> Result<(HeaderName, HeaderValue)> {
-    let (key, value) = value
-        .split_once(": ")
-        .context("Header value missing colon (\": \")")?;
-    let key = HeaderName::from_str(key).context("Invalid header name")?;
-    let value = HeaderValue::from_str(value).context("Invalid header value")?;
-    Ok((key, value))
-}

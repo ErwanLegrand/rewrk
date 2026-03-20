@@ -482,4 +482,69 @@ mod tests {
         let collector = CliCollector::new();
         assert_eq!(collector.total_requests(), 0);
     }
+
+    // --- Smoke tests for display_results ---
+
+    fn make_settings(display_json: bool, display_percentile: bool) -> crate::bench::BenchmarkSettings {
+        use ::http::{HeaderMap, Method};
+        use hyper::body::Bytes;
+        use rewrk_core::HttpProtocol;
+        use std::time::Duration;
+
+        crate::bench::BenchmarkSettings {
+            threads: 1,
+            connections: 1,
+            host: "http://localhost".to_string(),
+            protocol: HttpProtocol::Http1,
+            duration: Duration::from_secs(1),
+            display_percentile,
+            display_json,
+            rounds: 1,
+            method: Method::GET,
+            headers: HeaderMap::new(),
+            body: Bytes::new(),
+            insecure: false,
+            co_correction: true,
+        }
+    }
+
+    #[test]
+    fn smoke_display_results_empty_collector_non_json() {
+        let collector = CliCollector::new();
+        let settings = make_settings(false, false);
+        // Should not panic — prints "No requests completed successfully"
+        display_results(&collector, &settings);
+    }
+
+    #[test]
+    fn smoke_display_results_with_data_non_json() {
+        let collector = collector_from_ms(&[5, 10, 15, 20, 25]);
+        let settings = make_settings(false, false);
+        // Should not panic — prints latency/request/transfer stats
+        display_results(&collector, &settings);
+    }
+
+    #[test]
+    fn smoke_display_results_with_percentile() {
+        let collector = collector_from_ms(&[5, 10, 15, 20, 25]);
+        let settings = make_settings(false, true);
+        // Should not panic — prints percentile table
+        display_results(&collector, &settings);
+    }
+
+    #[test]
+    fn smoke_display_results_json_empty_collector() {
+        let collector = CliCollector::new();
+        let settings = make_settings(true, false);
+        // Should not panic — prints null-valued JSON
+        display_results(&collector, &settings);
+    }
+
+    #[test]
+    fn smoke_display_results_json_with_data() {
+        let collector = collector_from_ms(&[5, 10, 15, 20, 25]);
+        let settings = make_settings(true, false);
+        // Should not panic — prints JSON with latency values
+        display_results(&collector, &settings);
+    }
 }
