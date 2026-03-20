@@ -73,7 +73,7 @@ async fn test_multi_worker_benchmark() {
     benchmarker.set_num_workers(2);
     benchmarker.run().await;
 
-    let collector = benchmarker.consume_collector().await;
+    let collector = benchmarker.consume_collector().await.expect("consume collector");
 
     assert!(
         !collector.samples.is_empty(),
@@ -122,7 +122,7 @@ async fn test_multi_connection_per_worker() {
     benchmarker.set_num_workers(1);
     benchmarker.run().await;
 
-    let collector = benchmarker.consume_collector().await;
+    let collector = benchmarker.consume_collector().await.expect("consume collector");
 
     assert!(
         !collector.samples.is_empty(),
@@ -172,7 +172,7 @@ async fn test_custom_producer_and_collector() {
     benchmarker.set_num_workers(1);
     benchmarker.run().await;
 
-    let collector = benchmarker.consume_collector().await;
+    let collector = benchmarker.consume_collector().await.expect("consume collector");
 
     assert!(
         collector.samples_by_tag.len() > 1,

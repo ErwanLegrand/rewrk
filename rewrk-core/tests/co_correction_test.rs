@@ -73,7 +73,7 @@ async fn test_co_correction_with_latency_spikes() {
     benchmarker.set_num_workers(1);
     benchmarker.run().await;
 
-    let collector = benchmarker.consume_collector().await;
+    let collector = benchmarker.consume_collector().await.expect("consume collector");
     assert!(
         !collector.samples.is_empty(),
         "Expected at least one sample"

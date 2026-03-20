@@ -107,7 +107,7 @@ async fn test_reconnect_on_connection_close() {
     benchmarker.set_num_workers(1);
     benchmarker.run().await;
 
-    let collector = benchmarker.consume_collector().await;
+    let collector = benchmarker.consume_collector().await.expect("consume collector");
 
     // Gather all latency recordings across every sample.
     let total_latencies: u64 = collector.samples.iter().map(|s| s.latency().len()).sum();

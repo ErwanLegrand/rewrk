@@ -192,7 +192,14 @@ async fn run_worker<P, C>(
         .await
         .into_iter()
         .collect::<Result<RuntimeTimings, _>>()
-        .expect("Join tasks");
+        .unwrap_or_else(|e| {
+            tracing::error!(
+                worker_id = worker_id,
+                error = ?e,
+                "A connection task panicked; using zero timings for this worker."
+            );
+            RuntimeTimings::default()
+        });
 
     info!(worker_id = worker_id, "Benchmark completed for worker.");
 

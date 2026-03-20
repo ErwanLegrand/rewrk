@@ -52,6 +52,9 @@ pub enum Error {
     #[error("Failed to resolve the host socket address: {0}")]
     /// The system failed to resolve the socket address.
     AddressLookup(io::Error),
+    #[error("The collector task failed to join: {0}")]
+    /// The collector background task panicked or was cancelled.
+    CollectorJoinFailed(tokio::task::JoinError),
 }
 
 /// The core benchmarker runtime.
@@ -161,12 +164,15 @@ where
 
     /// Shuts the benchmarker down and returns the
     /// collector once complete.
-    pub async fn consume_collector(self) -> C {
+    pub async fn consume_collector(self) -> Result<C, Error> {
         self.shutdown();
         drop(self.worker_config);
 
         let handle = self.collector_handle;
-        handle.0.await.expect("Join task")
+        handle.0.await.map_err(|e| {
+            tracing::error!(error = ?e, "Collector task failed to join");
+            Error::CollectorJoinFailed(e)
+        })
     }
 
     /// Sets the shutdown flag for the running benchmark.

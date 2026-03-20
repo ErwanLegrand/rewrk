@@ -140,7 +140,10 @@ async fn run(settings: BenchmarkSettings) -> Result<()> {
     }
 
     benchmarker.run().await;
-    let collector = benchmarker.consume_collector().await;
+    let collector = benchmarker
+        .consume_collector()
+        .await
+        .map_err(|e| anyhow!("collector error: {}", e))?;
 
     // Display results from aggregated histograms
     results::display_results(&collector, &settings);

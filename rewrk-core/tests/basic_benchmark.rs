@@ -39,7 +39,7 @@ async fn test_basic_benchmark() {
     benchmarker.set_num_workers(1);
     benchmarker.run().await;
 
-    let mut collector = benchmarker.consume_collector().await;
+    let mut collector = benchmarker.consume_collector().await.expect("consume collector");
     let sample = collector.samples.remove(0);
     assert_eq!(sample.tag(), 0);
     assert_eq!(sample.latency().len(), 1);

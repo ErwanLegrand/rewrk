@@ -45,7 +45,7 @@ async fn test_basic_benchmark() {
     benchmarker.run().await;
     assert!(start.elapsed() >= Duration::from_secs(10));
 
-    let mut collector = benchmarker.consume_collector().await;
+    let mut collector = benchmarker.consume_collector().await.expect("consume collector");
     let sample = collector.samples.remove(0);
     assert_eq!(sample.tag(), 0);
     dbg!(

@@ -50,7 +50,7 @@
 //!     benchmarker.set_num_workers(1);
 //!     benchmarker.run().await;
 //!
-//!     let mut collector = benchmarker.consume_collector().await;
+//!     let mut collector = benchmarker.consume_collector().await?;
 //!     let sample = collector.samples.remove(0);
 //!     assert_eq!(sample.tag(), 0);
 //!     assert_eq!(sample.latency().len(), 1);
