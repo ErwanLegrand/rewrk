@@ -14,5 +14,10 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Unify CLI onto rewrk-core benchmarking engine
+## [~] Track: Unify CLI onto rewrk-core benchmarking engine
 *Link: [./conductor/tracks/cli_core_unification_20260319/](./conductor/tracks/cli_core_unification_20260319/)*
+
+---
+
+## [ ] Track: Add worker reconnection on connection close (regression fix)
+*Link: [./conductor/tracks/worker_reconnect_20260320/](./conductor/tracks/worker_reconnect_20260320/)*
