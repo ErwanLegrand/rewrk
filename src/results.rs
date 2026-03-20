@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::time::Duration;
-
 use colored::Colorize;
 use hdrhistogram::Histogram;
 use serde_json::json;
@@ -8,19 +5,6 @@ use serde_json::json;
 use crate::bench::BenchmarkSettings;
 use crate::cli_collector::CliCollector;
 use crate::utils::format_data;
-
-// ── Legacy types kept for src/http/ compatibility (Phase 3 removal) ──
-
-/// Legacy result type used by the old HTTP client in `src/http/`.
-/// Retained so that `mod http` continues to compile until Phase 3.
-#[allow(dead_code)]
-#[derive(Default)]
-pub struct WorkerResult {
-    pub total_times: Vec<Duration>,
-    pub request_times: Vec<Duration>,
-    pub buffer_sizes: Vec<usize>,
-    pub error_map: HashMap<String, usize>,
-}
 
 /// Microseconds to milliseconds as f64 for display.
 fn micros_to_ms(us: u64) -> f64 {

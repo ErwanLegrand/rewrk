@@ -1,8 +1,53 @@
+//! # ExpectedIntervalTracker — CMA-Based CO Correction Approximation
+//!
+//! ## How it works
+//!
+//! [`ExpectedIntervalTracker`] maintains a **Cumulative Moving Average (CMA)**
+//! of observed successful request latencies and treats that average as the
+//! *expected inter-request interval* for Coordinated Omission (CO) correction.
+//! When `record_correct()` in the worker detects a gap larger than this
+//! interval, it injects synthetic high-latency samples to represent requests
+//! that were never sent — the core CO correction mechanism.
+//!
+//! ## Known limitation: load-spike behaviour is inverted
+//!
+//! Under a **sustained load spike**, individual request latencies rise sharply.
+//! Because every observed latency is fed into the CMA, the running average
+//! inflates. A larger expected interval means the correction threshold is
+//! higher, so *fewer* synthetic samples are injected — exactly the opposite
+//! of what is needed. CO correction is therefore **weakest when the system
+//! is most stressed**.
+//!
+//! ## Why CMA and not a fixed interval?
+//!
+//! The standard approach used by wrk2 and HdrHistogram's test harness is to
+//! derive the expected interval from a **fixed target requests-per-second
+//! rate** (`expected_interval_us = 1_000_000 / target_rps_per_connection`).
+//! That value never inflates under load, so correction stays proportional to
+//! the actual gap.
+//!
+//! rewrk runs a **closed-loop benchmark**: connections send the next request
+//! as soon as the previous one completes — there is no explicit RPS target.
+//! Without a target rate, the CMA is the best available approximation of
+//! "how fast requests should be going."
+//!
+//! ## Future improvement
+//!
+//! If a target-RPS mode is added, the expected interval should be computed as:
+//!
+//! ```text
+//! expected_interval_us = 1_000_000 / target_rps_per_connection
+//! ```
+//!
+//! and the CMA tracker should be bypassed entirely for that mode.
+
 /// Tracks the expected inter-request interval per connection using a
-/// cumulative moving average of observed successful request latencies.
+/// Cumulative Moving Average (CMA) of observed successful request latencies.
 ///
-/// The expected interval represents how often requests "should" be sent
-/// and is used for Coordinated Omission correction.
+/// The expected interval is used as the CO correction threshold: gaps larger
+/// than this value trigger synthetic high-latency sample injection. This is a
+/// CMA-based approximation — see the module-level documentation for a
+/// discussion of its limitations under sustained load spikes.
 #[derive(Debug, Clone)]
 pub(crate) struct ExpectedIntervalTracker {
     /// The cumulative sum of all observed latencies in microseconds.

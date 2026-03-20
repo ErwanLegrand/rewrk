@@ -13,8 +13,6 @@ use tokio::time::Duration;
 mod bench;
 mod cli_collector;
 mod cli_producer;
-#[allow(dead_code)] // Legacy HTTP client; will be removed in Phase 3
-mod http;
 mod results;
 mod runtime;
 mod utils;
