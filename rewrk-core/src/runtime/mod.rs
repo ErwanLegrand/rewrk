@@ -1,4 +1,5 @@
 pub(crate) mod expected_interval;
+mod shutdown;
 mod worker;
 
 use std::future::Future;
@@ -10,7 +11,8 @@ use std::{cmp, io};
 use http::{HeaderValue, Uri};
 use tokio_native_tls::TlsConnector;
 
-pub(crate) use self::worker::{spawn_workers, ShutdownHandle, WorkerConfig};
+pub(crate) use self::shutdown::ShutdownHandle;
+pub(crate) use self::worker::{spawn_workers, WorkerConfig};
 use crate::connection::{Http1Connector, Http2Connector, ReWrkConnector};
 use crate::producer::Producer;
 use crate::recording::CollectorActor;

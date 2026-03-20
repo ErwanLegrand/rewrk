@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::mem;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -15,6 +14,7 @@ use crate::connection::{ProtocolConnection, ProtocolConnector};
 use crate::producer::{Batch, Producer, ProducerActor, ProducerBatches};
 use crate::recording::{CollectorMailbox, SampleFactory, SampleMetadata};
 use crate::runtime::expected_interval::ExpectedIntervalTracker;
+use crate::runtime::shutdown::ShutdownHandle;
 use crate::utils::RuntimeTimings;
 use crate::validator::ValidationError;
 use crate::{ResponseValidator, Sample};
@@ -349,24 +349,6 @@ where
     };
 
     Some(tokio::spawn(fut))
-}
-
-#[derive(Default, Clone)]
-pub(crate) struct ShutdownHandle {
-    /// A signal flag telling all workers to shutdown.
-    should_stop: Arc<AtomicBool>,
-}
-
-impl ShutdownHandle {
-    /// Checks if the worker should abort processing.
-    pub(crate) fn should_abort(&self) -> bool {
-        self.should_stop.load(Ordering::Relaxed)
-    }
-
-    /// Sets the abort flag across workers.
-    pub(crate) fn set_abort(&self) {
-        self.should_stop.store(true, Ordering::Relaxed);
-    }
 }
 
 pub(crate) struct WorkerConnection<Conn: ProtocolConnection> {
