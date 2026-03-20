@@ -153,7 +153,9 @@ impl Sample {
     /// This value is converted to micro seconds.
     pub(crate) fn record_latency(&mut self, dur: Duration) {
         let micros = dur.as_micros() as u64;
-        self.latency_hist.record(micros).expect("Record value");
+        if let Err(e) = self.latency_hist.record(micros) {
+            warn!(value = micros, error = %e, "Failed to record latency value");
+        }
     }
 
     #[inline]
@@ -169,9 +171,9 @@ impl Sample {
         expected_interval_us: u64,
     ) {
         let micros = dur.as_micros() as u64;
-        self.corrected_latency_hist
-            .record_correct(micros, expected_interval_us)
-            .expect("Record corrected value");
+        if let Err(e) = self.corrected_latency_hist.record_correct(micros, expected_interval_us) {
+            warn!(value = micros, expected_interval = expected_interval_us, error = %e, "Failed to record corrected latency value");
+        }
     }
 
     #[inline]
@@ -182,9 +184,10 @@ impl Sample {
         end_count: u64,
         dur: Duration,
     ) {
-        self.write_transfer_hist
-            .record(calculate_rate(start_count, end_count, dur))
-            .expect("Record value");
+        let rate = calculate_rate(start_count, end_count, dur);
+        if let Err(e) = self.write_transfer_hist.record(rate) {
+            warn!(value = rate, error = %e, "Failed to record write transfer rate");
+        }
     }
 
     #[inline]
@@ -195,15 +198,20 @@ impl Sample {
         end_count: u64,
         dur: Duration,
     ) {
-        self.read_transfer_hist
-            .record(calculate_rate(start_count, end_count, dur))
-            .expect("Record value");
+        let rate = calculate_rate(start_count, end_count, dur);
+        if let Err(e) = self.read_transfer_hist.record(rate) {
+            warn!(value = rate, error = %e, "Failed to record read transfer rate");
+        }
     }
 }
 
 #[inline]
 fn calculate_rate(start: u64, stop: u64, dur: Duration) -> u64 {
-    (stop.saturating_sub(start) as f64 / dur.as_secs_f64()).round() as u64
+    let secs = dur.as_secs_f64();
+    if secs == 0.0 {
+        return 0;
+    }
+    (stop.saturating_sub(start) as f64 / secs).round() as u64
 }
 
 #[cfg(test)]
@@ -411,6 +419,17 @@ mod tests {
 
         assert!(matches!(sample.errors[0], ValidationError::InvalidStatus(500)));
         assert!(matches!(sample.errors[1], ValidationError::Timeout));
+    }
+
+    #[test]
+    fn test_calculate_rate_zero_duration() {
+        assert_eq!(calculate_rate(0, 100, Duration::ZERO), 0);
+    }
+
+    #[test]
+    fn test_calculate_rate_normal() {
+        // 100 bytes in 1 second = 100 bytes/sec
+        assert_eq!(calculate_rate(0, 100, Duration::from_secs(1)), 100);
     }
 
     #[test]

@@ -53,7 +53,7 @@ impl Producer for CliProducer {
     }
 
     async fn create_batch(&mut self) -> anyhow::Result<RequestBatch> {
-        let start = self.start.expect("ready() must be called before create_batch()");
+        let start = self.start.ok_or_else(|| anyhow::anyhow!("ready() must be called before create_batch()"))?;
         if start.elapsed() >= self.duration {
             return Ok(RequestBatch::End);
         }
