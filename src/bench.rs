@@ -58,7 +58,7 @@ pub struct BenchmarkSettings {
 }
 
 /// Builds the runtime with the given settings and blocks on the main future.
-pub fn start_benchmark(settings: BenchmarkSettings) {
+pub fn start_benchmark(settings: BenchmarkSettings) -> anyhow::Result<()> {
     let rt = runtime::get_rt(settings.threads);
     let rounds = settings.rounds;
     let is_json = settings.display_json;
@@ -67,11 +67,7 @@ pub fn start_benchmark(settings: BenchmarkSettings) {
             println!("Beginning round {}...", i + 1);
         }
 
-        if let Err(e) = rt.block_on(run(settings.clone())) {
-            eprintln!();
-            eprintln!("{}", e);
-            return;
-        }
+        rt.block_on(run(settings.clone()))?;
 
         // Adds a line separator between rounds unless it's formatting
         // as a json, for readability.
@@ -79,6 +75,7 @@ pub fn start_benchmark(settings: BenchmarkSettings) {
             println!();
         };
     }
+    Ok(())
 }
 
 /// Controls the benchmark itself using the rewrk-core engine.

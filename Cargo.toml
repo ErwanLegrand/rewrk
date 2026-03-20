@@ -2,11 +2,11 @@
 name = "rewrk"
 version = "0.3.2"
 authors = ["Harrison Burt <57491488+ChillFish8@users.noreply.github.com>", "Programatik <programatik29@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 anyhow = "1"
-clap = "2"
+clap = { version = "4", features = ["derive"] }
 colored = "2"
 futures-util = "0.3"
 hdrhistogram = "7"
