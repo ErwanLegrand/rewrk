@@ -12,8 +12,6 @@
 //! enum keeps a single concrete type that the rest of the codebase can name
 //! while still routing to the correct implementation at runtime.
 
-use std::future::Future;
-
 use async_trait::async_trait;
 use http::response::Parts;
 use http::Request;
@@ -124,11 +122,11 @@ pub(crate) struct HttpStream {
 }
 
 impl HttpStream {
-    pub fn send(
+    pub async fn send(
         &mut self,
         request: Request<Body>,
-    ) -> impl Future<Output = Result<hyper::Response<Body>, hyper::Error>> {
-        self.conn.send_request(request)
+    ) -> Result<hyper::Response<Body>, hyper::Error> {
+        self.conn.send_request(request).await
     }
 }
 

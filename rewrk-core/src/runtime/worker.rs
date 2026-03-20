@@ -19,6 +19,24 @@ use crate::utils::RuntimeTimings;
 use crate::validator::ValidationError;
 use crate::{ResponseValidator, Sample};
 
+/// The outcome of a single `send()` call.
+enum RequestResult {
+    /// Request completed (successfully or with a non-fatal validation error).
+    Ok,
+    /// The connection was closed by the server; caller should reconnect.
+    Reconnect,
+}
+
+/// The outcome of executing a full batch of requests.
+enum BatchResult {
+    /// Batch completed, continue with the next one.
+    Continue,
+    /// Connection lost mid-batch, need to reconnect before continuing.
+    NeedsReconnect,
+    /// Fatal error or producer exhausted, stop this connection.
+    Stop,
+}
+
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 type ConnectionTask = JoinHandle<RuntimeTimings>;
 type WorkerGuard = flume::Receiver<()>;
@@ -280,12 +298,40 @@ where
         shutdown.clone(),
     );
 
+    let connector = connector.clone();
     let fut = async move {
         while !shutdown.should_abort() {
-            let can_continue = connection.execute_next_batch().await;
-
-            if !can_continue {
-                break;
+            match connection.execute_next_batch().await {
+                BatchResult::Continue => {},
+                BatchResult::NeedsReconnect => {
+                    debug!(
+                        worker_id = worker_id,
+                        "Connection closed by server, attempting reconnect..."
+                    );
+                    match connect_with_timeout(
+                        &connector,
+                        CONNECT_TIMEOUT,
+                        retry_max,
+                    )
+                    .await
+                    {
+                        Ok(Some(new_conn)) => {
+                            debug!(
+                                worker_id = worker_id,
+                                "Successfully reconnected."
+                            );
+                            connection.replace_connection(new_conn);
+                        },
+                        _ => {
+                            warn!(
+                                worker_id = worker_id,
+                                "Reconnection failed, stopping this connection."
+                            );
+                            break;
+                        },
+                    }
+                },
+                BatchResult::Stop => break,
             }
         }
 
@@ -395,13 +441,14 @@ impl<Conn: ProtocolConnection> WorkerConnection<Conn> {
 
     /// Gets the next batch from the producer and submits it to be executed.
     ///
-    /// The method returns if more batches are possibly available.
-    async fn execute_next_batch(&mut self) -> bool {
+    /// Returns a [`BatchResult`] indicating whether to continue, reconnect,
+    /// or stop.
+    async fn execute_next_batch(&mut self) -> BatchResult {
         let producer_start = Instant::now();
         let batch = match self.producer.recv_async().await {
             Ok(batch) => batch,
             // We've completed all batches.
-            Err(_) => return false,
+            Err(_) => return BatchResult::Stop,
         };
         let producer_elapsed = producer_start.elapsed();
 
@@ -412,43 +459,50 @@ impl<Conn: ProtocolConnection> WorkerConnection<Conn> {
         }
 
         let execute_start = Instant::now();
-        self.execute_batch(batch).await;
+        let result = self.execute_batch(batch).await;
         self.timings.execute_wait_runtime += execute_start.elapsed();
 
-        true
+        result
+    }
+
+    /// Replace the underlying protocol connection (used after reconnection).
+    fn replace_connection(&mut self, new_conn: Conn) {
+        self.conn = new_conn;
     }
 
     /// Executes a batch of requests to measure the metrics.
-    async fn execute_batch(&mut self, batch: Batch) {
+    async fn execute_batch(&mut self, batch: Batch) -> BatchResult {
         if self.sample.tag() != batch.tag {
             let success = self.submit_sample(batch.tag);
 
             if !success {
                 self.set_abort();
-                return;
+                return BatchResult::Stop;
             }
         }
 
         for request in batch.requests {
-            let result = self.send(request).await;
-
-            match result {
-                Ok(should_continue) if !should_continue => {
-                    self.set_abort();
-                    return;
+            match self.send(request).await {
+                Ok(RequestResult::Ok) => {},
+                Ok(RequestResult::Reconnect) => {
+                    return BatchResult::NeedsReconnect;
                 },
                 Err(e) => {
                     error!(error = ?e, "Worker encountered an error while benchmarking, aborting...");
                     self.set_abort();
-                    return;
+                    return BatchResult::Stop;
                 },
-                _ => {},
             }
         }
+
+        BatchResult::Continue
     }
 
-    /// Send a HTTP request and record the relevant metrics
-    async fn send(&mut self, request: Request<Body>) -> Result<bool, hyper::Error> {
+    /// Send a HTTP request and record the relevant metrics.
+    async fn send(
+        &mut self,
+        request: Request<Body>,
+    ) -> Result<RequestResult, hyper::Error> {
         let read_transfer_start = self.conn.usage().get_received_count();
         let write_transfer_start = self.conn.usage().get_written_count();
         let start = Instant::now();
@@ -456,9 +510,13 @@ impl<Conn: ProtocolConnection> WorkerConnection<Conn> {
         let (head, body) = match self.conn.execute_req(request).await {
             Ok(resp) => resp,
             Err(e) => {
-                if e.is_body_write_aborted() || e.is_closed() || e.is_connect() {
+                if e.is_body_write_aborted()
+                    || e.is_closed()
+                    || e.is_connect()
+                    || e.is_canceled()
+                {
                     self.sample.record_error(ValidationError::ConnectionAborted);
-                    return Ok(false);
+                    return Ok(RequestResult::Reconnect);
                 } else if e.is_incomplete_message()
                     || e.is_parse()
                     || e.is_parse_too_large()
@@ -473,7 +531,7 @@ impl<Conn: ProtocolConnection> WorkerConnection<Conn> {
                     return Err(e);
                 }
 
-                return Ok(true);
+                return Ok(RequestResult::Ok);
             },
         };
 
@@ -506,10 +564,12 @@ impl<Conn: ProtocolConnection> WorkerConnection<Conn> {
         // Submit the sample if it's window interval has elapsed.
         if self.sample_factory.should_submit(self.last_sent_sample) {
             let batch_tag = self.sample.tag();
-            let success = self.submit_sample(batch_tag);
-            return Ok(success);
+            if !self.submit_sample(batch_tag) {
+                self.set_abort();
+                return Ok(RequestResult::Ok);
+            }
         }
 
-        Ok(true)
+        Ok(RequestResult::Ok)
     }
 }
