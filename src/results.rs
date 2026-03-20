@@ -26,47 +26,23 @@ pub fn display_results(collector: &CliCollector, settings: &BenchmarkSettings) {
         return;
     }
 
-    display_latencies(collector.latency());
+    display_latencies_impl(collector.latency(), "Latencies");
     if settings.co_correction {
-        display_latencies_corrected(collector.corrected_latency());
+        display_latencies_impl(collector.corrected_latency(), "Latencies (CO-corrected)");
     }
     display_requests(collector);
     display_transfer(collector);
 
     if settings.display_percentile {
-        display_percentile_table(collector.latency());
+        display_percentile_table_impl(collector.latency(), "Avg Latency");
         if settings.co_correction {
-            display_percentile_table_corrected(collector.corrected_latency());
+            display_percentile_table_impl(collector.corrected_latency(), "CO-corrected");
         }
     }
 }
 
-/// Display uncorrected latency stats from the histogram.
-fn display_latencies(hist: &Histogram<u32>) {
-    let avg = hist.mean() / 1000.0;
-    let max = micros_to_ms(hist.max());
-    let min = micros_to_ms(hist.min());
-    let std_deviation = hist.stdev() / 1000.0;
-
-    println!("  Latencies:");
-    println!(
-        "    {:<7}  {:<7}  {:<7}  {:<7}  ",
-        "Avg".bright_yellow(),
-        "Stdev".bright_magenta(),
-        "Min".bright_green(),
-        "Max".bright_red(),
-    );
-    println!(
-        "    {:<7}  {:<7}  {:<7}  {:<7}  ",
-        format!("{:.2}ms", avg),
-        format!("{:.2}ms", std_deviation),
-        format!("{:.2}ms", min),
-        format!("{:.2}ms", max),
-    );
-}
-
-/// Display CO-corrected latency stats from the histogram.
-fn display_latencies_corrected(hist: &Histogram<u32>) {
+/// Display latency stats from the histogram with the given title.
+fn display_latencies_impl(hist: &Histogram<u32>, title: &str) {
     if hist.is_empty() {
         return;
     }
@@ -76,7 +52,7 @@ fn display_latencies_corrected(hist: &Histogram<u32>) {
     let min = micros_to_ms(hist.min());
     let std_deviation = hist.stdev() / 1000.0;
 
-    println!("  Latencies (CO-corrected):");
+    println!("  {}:", title);
     println!(
         "    {:<7}  {:<7}  {:<7}  {:<7}  ",
         "Avg".bright_yellow(),
@@ -142,100 +118,36 @@ fn display_transfer(collector: &CliCollector) {
     )
 }
 
-/// Display the percentile table from the uncorrected latency histogram.
-fn display_percentile_table(hist: &Histogram<u32>) {
-    println!("+ {:-^15} + {:-^15} +", "", "",);
-
-    println!(
-        "| {:^15} | {:^15} |",
-        "Percentile".bright_cyan(),
-        "Avg Latency".bright_yellow(),
-    );
-
-    println!("+ {:-^15} + {:-^15} +", "", "",);
-
-    println!(
-        "| {:^15} | {:^15} |",
-        "99.9%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.9)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "99%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "95%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(95.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "90%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(90.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "75%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(75.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "50%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(50.0)))
-    );
-
-    println!("+ {:-^15} + {:-^15} +", "", "",);
-}
-
-/// Display the CO-corrected percentile table.
-fn display_percentile_table_corrected(hist: &Histogram<u32>) {
+/// Display the percentile table from the histogram with the given column title.
+fn display_percentile_table_impl(hist: &Histogram<u32>, column_title: &str) {
     if hist.is_empty() {
         return;
     }
 
-    println!("+ {:-^15} + {:-^15} +", "", "",);
-
+    println!("+ {:-^15} + {:-^15} +", "", "");
     println!(
         "| {:^15} | {:^15} |",
         "Percentile".bright_cyan(),
-        "CO-corrected".bright_yellow(),
+        column_title.bright_yellow(),
     );
+    println!("+ {:-^15} + {:-^15} +", "", "");
 
-    println!("+ {:-^15} + {:-^15} +", "", "",);
+    for (label, pct) in [
+        ("99.9%", 99.9),
+        ("99%", 99.0),
+        ("95%", 95.0),
+        ("90%", 90.0),
+        ("75%", 75.0),
+        ("50%", 50.0),
+    ] {
+        println!(
+            "| {:^15} | {:^15} |",
+            label,
+            format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(pct)))
+        );
+    }
 
-    println!(
-        "| {:^15} | {:^15} |",
-        "99.9%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.9)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "99%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(99.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "95%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(95.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "90%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(90.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "75%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(75.0)))
-    );
-    println!(
-        "| {:^15} | {:^15} |",
-        "50%",
-        format!("{:.2}ms", micros_to_ms(hist.value_at_percentile(50.0)))
-    );
-
-    println!("+ {:-^15} + {:-^15} +", "", "",);
+    println!("+ {:-^15} + {:-^15} +", "", "");
 }
 
 /// Display results as JSON.
