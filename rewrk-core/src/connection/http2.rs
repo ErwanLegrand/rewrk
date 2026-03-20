@@ -2,150 +2,46 @@
 //!
 //! Provides [`Http2Connector`] and [`Http2Connection`] as concrete implementations
 //! of [`ProtocolConnector`] and [`ProtocolConnection`] for HTTP/2 benchmarking.
+//!
+//! This module is a thin wrapper around the generic [`BaseConnector`] /
+//! [`BaseConnection`] types, parameterized with [`Http2Config`] which sets
+//! `http2_only(true)` on the hyper connection builder.
 
-use std::net::SocketAddr;
-
-use async_trait::async_trait;
-use http::response::Parts;
-use http::uri::{Authority, Scheme as HttpScheme};
-use http::{header, HeaderValue, Request, Uri};
-use hyper::body::Bytes;
 use hyper::client::conn;
-use hyper::Body;
-use tokio::net::TcpStream;
 
-use super::conn::{handshake, HttpStream};
-use super::protocol::{ProtocolConnection, ProtocolConnector};
-use super::Scheme;
-use crate::utils::IoUsageTracker;
+use super::base::{BaseConnector, BaseConnection, BuilderConfig};
+
+/// HTTP/2 builder configuration — sets `http2_only(true)`.
+#[derive(Clone)]
+pub struct Http2Config;
+
+impl BuilderConfig for Http2Config {
+    fn configure(builder: &mut conn::Builder) {
+        builder.http2_only(true);
+    }
+}
 
 /// An HTTP/2 connector that establishes plain TCP or TLS connections
 /// and performs the HTTP/2 handshake with h2c (HTTP/2 over cleartext) or h2.
 ///
 /// This connector sets `http2_only(true)` on the connection builder,
 /// so the resulting connection always speaks HTTP/2.
-#[derive(Clone)]
-pub struct Http2Connector {
-    addr: SocketAddr,
-    scheme: Scheme,
-    host: String,
-    uri_scheme: HttpScheme,
-    uri_authority: Authority,
-    host_header: HeaderValue,
-}
-
-impl Http2Connector {
-    /// Create a new HTTP/2 connector.
-    ///
-    /// # Arguments
-    ///
-    /// * `addr` - The resolved socket address to connect to.
-    /// * `scheme` - Whether to use plain HTTP or HTTPS (with TLS connector).
-    /// * `host` - The hostname used for TLS SNI.
-    /// * `uri` - The base URI (scheme + authority) for requests. Must have both scheme and authority.
-    /// * `host_header` - The value to set in the `Host` header on each request.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `uri` is missing a scheme or authority.
-    pub fn new(
-        addr: SocketAddr,
-        scheme: Scheme,
-        host: impl Into<String>,
-        uri: Uri,
-        host_header: HeaderValue,
-    ) -> Self {
-        let uri_scheme = uri.scheme().expect("URI must have a scheme").clone();
-        let uri_authority = uri.authority().expect("URI must have an authority").clone();
-        Self {
-            addr,
-            scheme,
-            host: host.into(),
-            uri_scheme,
-            uri_authority,
-            host_header,
-        }
-    }
-}
-
-#[async_trait]
-impl ProtocolConnector for Http2Connector {
-    type Connection = Http2Connection;
-
-    async fn connect(&self) -> anyhow::Result<Self::Connection> {
-        let mut conn_builder = conn::Builder::new();
-        conn_builder.http2_only(true);
-
-        let stream = TcpStream::connect(self.addr).await?;
-
-        let usage_tracker = IoUsageTracker::new();
-        let stream = usage_tracker.wrap_stream(stream);
-
-        let stream = match self.scheme {
-            Scheme::Http => handshake(conn_builder, stream).await?,
-            Scheme::Https(ref tls_connector) => {
-                let stream = tls_connector.connect(&self.host, stream).await?;
-                handshake(conn_builder, stream).await?
-            },
-        };
-
-        Ok(Http2Connection {
-            uri_scheme: self.uri_scheme.clone(),
-            uri_authority: self.uri_authority.clone(),
-            host_header: self.host_header.clone(),
-            stream,
-            io_tracker: usage_tracker,
-        })
-    }
-}
+pub type Http2Connector = BaseConnector<Http2Config>;
 
 /// An established HTTP/2 connection that can execute requests.
-pub struct Http2Connection {
-    uri_scheme: HttpScheme,
-    uri_authority: Authority,
-    host_header: HeaderValue,
-    stream: HttpStream,
-    io_tracker: IoUsageTracker,
-}
-
-#[async_trait]
-impl ProtocolConnection for Http2Connection {
-    #[inline]
-    async fn execute_req(
-        &mut self,
-        mut request: Request<Body>,
-    ) -> Result<(Parts, Bytes), hyper::Error> {
-        let request_uri = request.uri();
-        let mut builder = Uri::builder()
-            .scheme(self.uri_scheme.clone())
-            .authority(self.uri_authority.clone());
-        if let Some(path) = request_uri.path_and_query() {
-            builder = builder.path_and_query(path.clone());
-        }
-        *request.uri_mut() = builder.build().expect("pre-validated URI components");
-        request
-            .headers_mut()
-            .insert(header::HOST, self.host_header.clone());
-
-        let resp = self.stream.send(request).await?;
-        let (head, body) = resp.into_parts();
-        let body = hyper::body::to_bytes(body).await?;
-        Ok((head, body))
-    }
-
-    #[inline]
-    fn usage(&self) -> &IoUsageTracker {
-        &self.io_tracker
-    }
-}
+pub type Http2Connection = BaseConnection;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::routing::get;
     use axum::Router;
+    use http::{HeaderValue, Request, Uri};
+    use hyper::Body;
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
+
+    use crate::connection::{protocol::ProtocolConnection, protocol::ProtocolConnector, Scheme};
 
     /// Spin up an axum server that supports HTTP/2 over cleartext (h2c).
     async fn start_test_server() -> SocketAddr {
