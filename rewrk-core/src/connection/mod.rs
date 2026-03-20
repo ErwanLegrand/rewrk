@@ -52,6 +52,7 @@ impl Scheme {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use native_tls;
 
     #[test]
     fn test_http_protocol_is_http1() {
@@ -71,5 +72,15 @@ mod tests {
     fn test_scheme_default_port_http() {
         let scheme = Scheme::Http;
         assert_eq!(scheme.default_port(), 80);
+    }
+
+    #[test]
+    fn test_scheme_default_port_https() {
+        let native_connector = native_tls::TlsConnector::builder()
+            .build()
+            .expect("build native TlsConnector");
+        let tls = TlsConnector::from(native_connector);
+        let scheme = Scheme::Https(tls);
+        assert_eq!(scheme.default_port(), 443);
     }
 }

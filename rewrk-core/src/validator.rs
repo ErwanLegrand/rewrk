@@ -120,4 +120,42 @@ mod tests {
             other => panic!("Expected InvalidStatus(404), got {:?}", other),
         }
     }
+
+    #[test]
+    fn test_default_validator_accepts_201() {
+        let validator = DefaultValidator;
+        let parts = parts_with_status(StatusCode::CREATED);
+        let result = validator.validate(parts, Bytes::new());
+        assert!(result.is_ok(), "Expected 201 Created to be accepted");
+    }
+
+    #[test]
+    fn test_default_validator_accepts_204() {
+        let validator = DefaultValidator;
+        let parts = parts_with_status(StatusCode::NO_CONTENT);
+        let result = validator.validate(parts, Bytes::new());
+        assert!(result.is_ok(), "Expected 204 No Content to be accepted");
+    }
+
+    #[test]
+    fn test_default_validator_rejects_301() {
+        let validator = DefaultValidator;
+        let parts = parts_with_status(StatusCode::MOVED_PERMANENTLY);
+        let result = validator.validate(parts, Bytes::new());
+        match result {
+            Err(ValidationError::InvalidStatus(code)) => assert_eq!(code, 301),
+            other => panic!("Expected InvalidStatus(301), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_default_validator_rejects_302() {
+        let validator = DefaultValidator;
+        let parts = parts_with_status(StatusCode::FOUND);
+        let result = validator.validate(parts, Bytes::new());
+        match result {
+            Err(ValidationError::InvalidStatus(code)) => assert_eq!(code, 302),
+            other => panic!("Expected InvalidStatus(302), got {:?}", other),
+        }
+    }
 }

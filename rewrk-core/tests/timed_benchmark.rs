@@ -14,17 +14,39 @@ use rewrk_core::{
     SampleCollector,
 };
 
-static ADDR: &str = "127.0.0.1:19999";
+async fn spawn_server() -> std::net::SocketAddr {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind random port");
+    let addr = listener.local_addr().expect("local addr");
+
+    let std_listener = listener.into_std().expect("into std listener");
+    std_listener
+        .set_nonblocking(false)
+        .expect("set blocking for axum");
+
+    let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+
+    tokio::spawn(async move {
+        axum::Server::from_tcp(std_listener)
+            .expect("from tcp")
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    addr
+}
 
 #[tokio::test]
 async fn test_basic_benchmark() {
     let _ = tracing_subscriber::fmt::try_init();
 
-    tokio::spawn(run_server());
+    let addr = spawn_server().await;
 
     let uri = Uri::builder()
         .scheme("http")
-        .authority(ADDR)
+        .authority(addr.to_string().as_str())
         .path_and_query("/")
         .build()
         .expect("Create URI");
@@ -54,16 +76,6 @@ async fn test_basic_benchmark() {
         sample.latency().max(),
         sample.latency().stdev(),
     );
-}
-
-async fn run_server() {
-    // build our application with a single route
-    let app = Router::new().route("/", get(|| async { "Hello, World!" }));
-
-    axum::Server::bind(&ADDR.parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
 }
 
 #[derive(Clone)]
