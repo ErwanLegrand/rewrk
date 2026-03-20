@@ -57,11 +57,15 @@ impl<I: AsyncRead> AsyncRead for RecordStream<I> {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         let this = self.project();
+        let before = buf.filled().len();
         let poll_result = this.inner.poll_read(cx, buf);
 
-        this.usage
-            .received
-            .fetch_add(buf.filled().len() as u64, Ordering::SeqCst);
+        let newly_read = buf.filled().len() - before;
+        if newly_read > 0 {
+            this.usage
+                .received
+                .fetch_add(newly_read as u64, Ordering::SeqCst);
+        }
 
         poll_result
     }
@@ -73,10 +77,16 @@ impl<I: AsyncWrite> AsyncWrite for RecordStream<I> {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        self.usage
-            .written
-            .fetch_add(buf.len() as u64, Ordering::SeqCst);
-        self.project().inner.poll_write(cx, buf)
+        let this = self.project();
+        let poll_result = this.inner.poll_write(cx, buf);
+
+        if let Poll::Ready(Ok(n)) = &poll_result {
+            this.usage
+                .written
+                .fetch_add(*n as u64, Ordering::SeqCst);
+        }
+
+        poll_result
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -142,5 +152,44 @@ mod tests {
         stream.read_exact(&mut buf).await.unwrap();
 
         assert_eq!(tracker.get_received_count(), data.len() as u64);
+    }
+
+    #[tokio::test]
+    async fn test_poll_read_counts_only_newly_read_bytes() {
+        // Verifies that pre-existing buffer data is not counted
+        let tracker = IoUsageTracker::new();
+        let (mut server, client) = tokio::io::duplex(1024);
+        let mut stream = tracker.wrap_stream(client);
+
+        let first_chunk = b"hello";
+        let second_chunk = b"world";
+
+        server.write_all(first_chunk).await.unwrap();
+        server.write_all(second_chunk).await.unwrap();
+        drop(server);
+
+        let mut buf = vec![0u8; first_chunk.len() + second_chunk.len()];
+        stream.read_exact(&mut buf).await.unwrap();
+
+        // Should count exactly the bytes read, not cumulative filled lengths
+        assert_eq!(
+            tracker.get_received_count(),
+            (first_chunk.len() + second_chunk.len()) as u64
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_write_counts_only_actually_written_bytes() {
+        // Verifies that only bytes confirmed written (Poll::Ready(Ok(n))) are counted
+        let tracker = IoUsageTracker::new();
+        let (client, _server) = tokio::io::duplex(1024);
+        let mut stream = tracker.wrap_stream(client);
+
+        let data = b"hello world";
+        let n = stream.write(data).await.unwrap();
+
+        // Should count actual bytes written (n), not buf.len() unconditionally
+        assert_eq!(tracker.get_written_count(), n as u64);
+        assert_eq!(tracker.get_received_count(), 0);
     }
 }
