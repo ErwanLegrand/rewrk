@@ -19,5 +19,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Add worker reconnection on connection close (regression fix)
+## [x] Track: Add worker reconnection on connection close (regression fix)
 *Link: [./conductor/tracks/worker_reconnect_20260320/](./conductor/tracks/worker_reconnect_20260320/)*

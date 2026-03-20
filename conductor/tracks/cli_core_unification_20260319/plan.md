@@ -15,7 +15,7 @@
     - [x] Verify tests pass
 - [x] Task: Conductor - User Manual Verification 'Build CLI Producer and Collector' (Protocol in workflow.md)
 
-## Phase 2: Migrate bench.rs to rewrk-core Engine
+## Phase 2: Migrate bench.rs to rewrk-core Engine [checkpoint: ddc8f0d]
 
 - [x] Task: Replace http::start_tasks with ReWrkBenchmark in bench.rs [4d8b164]
     - [x] Write integration test: CLI benchmark with CliProducer + CliCollector produces expected output
@@ -28,7 +28,7 @@
     - [x] Refactor `results.rs` to accept aggregated histograms instead of raw Vec<Duration>
     - [x] Remove `build_corrected_stats`, `WorkerResult`, and raw duration collection
     - [x] Verify --pct, --json, and default output formats match previous behavior
-- [ ] Task: Conductor - User Manual Verification 'Migrate bench.rs to rewrk-core Engine' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Migrate bench.rs to rewrk-core Engine' (Protocol in workflow.md)
 
 ## Phase 3: Cleanup and Hardening
 
