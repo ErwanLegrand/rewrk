@@ -122,7 +122,7 @@ pub(crate) struct HttpStream {
 }
 
 impl HttpStream {
-    pub async fn send(
+    pub(crate) async fn send(
         &mut self,
         request: Request<Body>,
     ) -> Result<hyper::Response<Body>, hyper::Error> {

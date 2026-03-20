@@ -16,19 +16,19 @@ pub use self::protocol::{ProtocolConnection, ProtocolConnector};
 #[derive(Clone, Copy, Debug)]
 pub enum HttpProtocol {
     /// Sets the http protocol to be used as h1
-    HTTP1,
+    Http1,
 
     /// Sets the http protocol to be used as h2
-    HTTP2,
+    Http2,
 }
 
 impl HttpProtocol {
     pub fn is_http1(&self) -> bool {
-        matches!(self, Self::HTTP1)
+        matches!(self, Self::Http1)
     }
 
     pub fn is_http2(&self) -> bool {
-        matches!(self, Self::HTTP2)
+        matches!(self, Self::Http2)
     }
 }
 
@@ -54,14 +54,14 @@ mod tests {
 
     #[test]
     fn test_http_protocol_is_http1() {
-        let proto = HttpProtocol::HTTP1;
+        let proto = HttpProtocol::Http1;
         assert!(proto.is_http1());
         assert!(!proto.is_http2());
     }
 
     #[test]
     fn test_http_protocol_is_http2() {
-        let proto = HttpProtocol::HTTP2;
+        let proto = HttpProtocol::Http2;
         assert!(proto.is_http2());
         assert!(!proto.is_http1());
     }

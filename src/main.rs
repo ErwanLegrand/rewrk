@@ -68,9 +68,9 @@ fn main() {
     let json: bool = args.is_present("json");
 
     let protocol = if http2 {
-        HttpProtocol::HTTP2
+        HttpProtocol::Http2
     } else {
-        HttpProtocol::HTTP1
+        HttpProtocol::Http1
     };
 
     let duration: &str = args.value_of("duration").unwrap_or("1s");
@@ -314,16 +314,5 @@ fn parse_args() -> ArgMatches<'static> {
                 .takes_value(false)
                 .required(false),
         )
-        //.arg(
-        //    Arg::with_name("random")
-        //        .long("rand")
-        //        .help(
-        //            "Sets the benchmark type to random mode, \
-        //             clients will randomly connect and re-connect.\n\
-        //             NOTE: This will cause the HTTP2 flag to be ignored."
-        //        )
-        //        .takes_value(false)
-        //        .required(false)
-        //)
         .get_matches()
 }

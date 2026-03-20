@@ -61,7 +61,7 @@ async fn test_co_correction_with_latency_spikes() {
     let mut benchmarker = ReWrkBenchmark::create(
         uri,
         1,
-        HttpProtocol::HTTP1,
+        HttpProtocol::Http1,
         TimedProducer::new(BENCHMARK_DURATION),
         CoCollector::default(),
     )

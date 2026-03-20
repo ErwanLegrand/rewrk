@@ -30,7 +30,7 @@ async fn test_basic_benchmark() {
     let mut benchmarker = ReWrkBenchmark::create(
         uri,
         1,
-        HttpProtocol::HTTP2,
+        HttpProtocol::Http2,
         BasicProducer::default(),
         BasicCollector::default(),
     )

@@ -65,7 +65,7 @@ pub enum Error {
 ///
 /// By default this system will use `n - 1` worker threads where `n`
 /// is the number of logical CPU cores available, this can be
-/// overriden using the [ReWrkBenchmark::set_num_workers] method.
+/// overridden using the [ReWrkBenchmark::set_num_workers] method.
 pub struct ReWrkBenchmark<P, C>
 where
     P: Producer + Clone,
@@ -234,8 +234,8 @@ fn create_connector(
             }
 
             match protocol {
-                HttpProtocol::HTTP1 => builder.request_alpns(&["http/1.1"]),
-                HttpProtocol::HTTP2 => builder.request_alpns(&["h2"]),
+                HttpProtocol::Http1 => builder.request_alpns(&["http/1.1"]),
+                HttpProtocol::Http2 => builder.request_alpns(&["h2"]),
             };
 
             let cfg = builder.build().map_err(Error::TlsError)?;
@@ -270,14 +270,14 @@ fn create_connector(
     let host = host.to_string();
 
     let connector = match protocol {
-        HttpProtocol::HTTP1 => ReWrkConnector::http1(Http1Connector::new(
+        HttpProtocol::Http1 => ReWrkConnector::http1(Http1Connector::new(
             addr,
             scheme,
             host,
             uri,
             host_header,
         )),
-        HttpProtocol::HTTP2 => ReWrkConnector::http2(Http2Connector::new(
+        HttpProtocol::Http2 => ReWrkConnector::http2(Http2Connector::new(
             addr,
             scheme,
             host,

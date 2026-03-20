@@ -19,11 +19,11 @@ pub enum ValidationError {
     #[error("The request contained a header, but it was invalid: {0}")]
     /// The request contained a header, but it was invalid
     InvalidHeader(Cow<'static, str>),
-    #[error("The connection was aborted by the remote serve.")]
+    #[error("The connection was aborted by the remote server.")]
     /// The connection was aborted by the remote server
     ConnectionAborted,
-    #[error("The connection took to long to respond")]
-    /// The connection took to long to respond
+    #[error("The connection took too long to respond")]
+    /// The connection took too long to respond
     Timeout,
     #[error("A validation error rejected the request: {0}")]
     /// A validation error rejected the request

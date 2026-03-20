@@ -352,24 +352,24 @@ where
 }
 
 #[derive(Default, Clone)]
-pub struct ShutdownHandle {
+pub(crate) struct ShutdownHandle {
     /// A signal flag telling all workers to shutdown.
     should_stop: Arc<AtomicBool>,
 }
 
 impl ShutdownHandle {
     /// Checks if the worker should abort processing.
-    pub fn should_abort(&self) -> bool {
+    pub(crate) fn should_abort(&self) -> bool {
         self.should_stop.load(Ordering::Relaxed)
     }
 
     /// Sets the abort flag across workers.
-    pub fn set_abort(&self) {
+    pub(crate) fn set_abort(&self) {
         self.should_stop.store(true, Ordering::Relaxed);
     }
 }
 
-pub struct WorkerConnection<Conn: ProtocolConnection> {
+pub(crate) struct WorkerConnection<Conn: ProtocolConnection> {
     /// The protocol connection for benchmarking.
     conn: Conn,
     /// The sample factory for producing metric samples.

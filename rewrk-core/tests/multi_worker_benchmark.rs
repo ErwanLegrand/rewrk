@@ -63,7 +63,7 @@ async fn test_multi_worker_benchmark() {
     let mut benchmarker = ReWrkBenchmark::create(
         uri,
         4, // concurrency (connections)
-        HttpProtocol::HTTP1,
+        HttpProtocol::Http1,
         CountedProducer::new(10),
         BasicCollector::default(),
     )
@@ -112,7 +112,7 @@ async fn test_multi_connection_per_worker() {
     let mut benchmarker = ReWrkBenchmark::create(
         uri,
         4, // concurrency (connections)
-        HttpProtocol::HTTP1,
+        HttpProtocol::Http1,
         CountedProducer::new(8),
         BasicCollector::default(),
     )
@@ -162,7 +162,7 @@ async fn test_custom_producer_and_collector() {
     let mut benchmarker = ReWrkBenchmark::create(
         uri,
         1,
-        HttpProtocol::HTTP1,
+        HttpProtocol::Http1,
         TaggedProducer::default(),
         TagGroupingCollector::default(),
     )

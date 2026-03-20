@@ -98,7 +98,7 @@ async fn test_reconnect_on_connection_close() {
     let mut benchmarker = ReWrkBenchmark::create(
         uri,
         1,
-        HttpProtocol::HTTP1,
+        HttpProtocol::Http1,
         ReconnectProducer::default(),
         ReconnectCollector::default(),
     )
