@@ -30,7 +30,7 @@
     - [x] Verify --pct, --json, and default output formats match previous behavior
 - [x] Task: Conductor - User Manual Verification 'Migrate bench.rs to rewrk-core Engine' (Protocol in workflow.md)
 
-## Phase 3: Cleanup and Hardening
+## Phase 3: Cleanup and Hardening [checkpoint: 3c1e97d]
 
 - [x] Task: Remove src/http/ module [fdd8af7]
     - [x] Delete src/http/mod.rs, src/http/usage.rs, src/http/user_input.rs
@@ -49,4 +49,4 @@
     - [x] Run cargo clippy --all -- -D warnings and verify zero warnings
     - [x] Run cargo test --all and verify zero failures (117 tests)
     - [x] Verify --json output schema backward compatibility
-- [ ] Task: Conductor - User Manual Verification 'Cleanup and Hardening' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Cleanup and Hardening' (Protocol in workflow.md)
