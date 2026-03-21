@@ -1,0 +1,8 @@
+{
+  "track_id": "upgrade_clap_20260320",
+  "type": "chore",
+  "status": "new",
+  "created_at": "2026-03-20T11:00:00Z",
+  "updated_at": "2026-03-20T11:00:00Z",
+  "description": "Upgrade clap 2.x to 4.x to eliminate unmaintained/unsound transitive dependencies"
+}

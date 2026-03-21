@@ -1,0 +1,8 @@
+{
+  "track_id": "fix_hotpath_expects_20260320",
+  "type": "bug",
+  "status": "new",
+  "created_at": "2026-03-20T11:00:00Z",
+  "updated_at": "2026-03-20T11:00:00Z",
+  "description": "Replace .expect() panics in hot-path recording and add response body size limit"
+}
